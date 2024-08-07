@@ -1,0 +1,11 @@
+## lane 1, sorted neurons ##
+cellranger count --id=cellranger_count_outptut_lane_1_sorted --libraries=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/neuron_data/cellranger_input_files/libraries_lane_1.csv --transcriptome=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/transcriptome_reference/refdata-cellranger-GRCh38-3.0.0/ --feature-ref=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/neuron_data/cellranger_input_files/feature_reference.csv --expect-cells=20000 --localmem=200
+
+## lane 2, sorted neurons ##
+cellranger count --id=cellranger_count_outptut_lane_2_sorted --libraries=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/neuron_data/cellranger_input_files/libraries_lane_2.csv --transcriptome=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/transcriptome_reference/refdata-cellranger-GRCh38-3.0.0/ --feature-ref=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/neuron_data/cellranger_input_files/feature_reference.csv --expect-cells=20000 --localmem=200
+
+## lane 3, not sorted neurons ##
+cellranger count --id=cellranger_count_output_lane_3_not_sorted --libraries=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/neuron_data/cellranger_input_files/libraries_lane_3.csv --transcriptome=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/transcriptome_reference/refdata-cellranger-GRCh38-3.0.0/ --feature-ref=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/neuron_data/cellranger_input_files/feature_reference.csv --expect-cells=20000 --localmem=200
+
+## lane 4, not sorted neurons ##
+cellranger count --id=cellranger_count_output_lane_4_not_sorted --libraries=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/neuron_data/cellranger_input_files/libraries_lane_4.csv --transcriptome=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/transcriptome_reference/refdata-cellranger-GRCh38-3.0.0/ --feature-ref=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/neuron_data/cellranger_input_files/feature_reference.csv --expect-cells=20000 --localmem=200

@@ -1,0 +1,1 @@
+cellranger aggr --id= cellranger_aggr_output --csv=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/neuron_data/cellranger_input_files/aggregate_input_file.csv

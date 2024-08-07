@@ -1,0 +1,3 @@
+cellranger mkfastq --id=cellranger_mkfastq_output \
+--run=/net/shendure/vol9/seq/NEXTSEQ/220810_VH00979_22_AAAMCTVHV/ \
+--csv=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/neuron_data/cellranger_input_files/Sample_Sheet.csv
