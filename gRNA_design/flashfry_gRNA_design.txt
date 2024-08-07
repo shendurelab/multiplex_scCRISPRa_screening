@@ -1,0 +1,63 @@
+##First download and install FlashFry (available on github: https://github.com/mckennalab/FlashFry#quickstart)
+##There are also instructions for running Flashfry on the github
+##Download and install bedtools by compiling from github: https://bedtools.readthedocs.io/en/latest/content/installation.html
+
+After downloading bedtools run this code to compile from the tar.gz file:
+tar -zxvf /Users/troymcdiarmid/Desktop/bedtools-2.30.0.tar.gz
+cd bedtools2
+make
+
+
+##Next download your reference genome e.g. hg19.fa.gz from the relevant source (e.g. UCSC genome browser)
+
+
+##Running Flashfry on you computer
+
+##Make tmp directory for your guide database in your chosen directory
+
+mkdir /tmp
+
+
+##Make sure you are running Java 8. You can check with "java -version" And switch to java 8 if necessary with:
+
+export PATH="/Library/Internet Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/bin:$PATH"
+
+
+##Then generate the database (should only have to do this once for each reference but can take a while)
+
+java -Xmx8g -jar /Users/troymcdiarmid/Desktop/FlashFry-assembly-1.12.jar \
+index \
+--tmpLocation /Users/troymcdiarmid/Documents/Neurohub/CRISPa-QTL_pilot_sgRNA_seqs/tmp \
+--database hg38_spcas9ngg_database \
+--reference /Users/troymcdiarmid/Documents/Neurohub/reference_genomes/hg38.fa.gz \
+--enzyme spcas9ngg
+
+##Converting bedfiles to FASTA 
+ 
+#Make sure your reference genome is expanded using
+
+gzip -d hg19.fa.gz
+
+##then run getfasta
+
+
+bedtools getfasta -fi /net/shendure/vol10/projects/troym/ResQTL/nobackup/promoter_pilot/flashfry_guide_design/hg38.fa -bed /net/shendure/vol10/projects/troym/ResQTL/nobackup/promoter_pilot/flashfry_guide_design/gencode.v38.basic.coding.transcripts.500bp_promoters.CRISPRa_QTL_PILOT.bed -name -s -fo /net/shendure/vol10/projects/troym/ResQTL/nobackup/promoter_pilot/flashfry_guide_design/gencode.v38.basic.coding.transcripts.500bp_promoters.CRISPRa_QTL_PILOT.fa
+
+
+##Discovering guides in a set of fasta files
+
+java -Xmx8g -jar /Users/troymcdiarmid/Desktop/FlashFry-assembly-1.12.jar \
+ discover \
+ --database /Users/troymcdiarmid/Documents/Neurohub/CRISPa-QTL_pilot_sgRNA_seqs/tmp/hg38_spcas9ngg_database \
+ --fasta /Users/troymcdiarmid/Documents/Neurohub/pilot_promoter_bed_\&_fasta_files/gencode.v38.basic.coding.transcripts.500bp_promoters.CRISPRa_QTL_PILOT.fa \
+ --output /Users/troymcdiarmid/Documents/Neurohub/pilot_promoter_bed_\&_fasta_files/gencode.v38.basic.coding.transcripts.500bp_promoters.CRISPRa_QTL_PILOT.output
+
+
+##Now we score the discovered sites
+
+java -Xmx8g -jar /Users/troymcdiarmid/Desktop/FlashFry-assembly-1.12.jar \
+ score \
+ --input /Users/troymcdiarmid/Documents/Neurohub/pilot_promoter_bed_\&_fasta_files/gencode.v38.basic.coding.transcripts.500bp_promoters.CRISPRa_QTL_PILOT.output \
+ --output /Users/troymcdiarmid/Documents/Neurohub/pilot_promoter_bed_\&_fasta_files/gencode.v38.basic.coding.transcripts.500bp_promoters.CRISPRa_QTL_PILOT.output.scored \
+ --scoringMetrics doench2014ontarget,doench2016cfd,dangerous,hsu2013,minot \
+ --database /Users/troymcdiarmid/Documents/Neurohub/CRISPa-QTL_pilot_sgRNA_seqs/tmp/hg38_spcas9ngg_database
