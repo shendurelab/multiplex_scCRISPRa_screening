@@ -1,0 +1,35 @@
+# Parallelizing CRISPRaQTL tests across guides
+# @author Diego
+
+# NOTES
+# usually I run 'snakemake -np | less' first to see if it'll run smoothly
+# then to start sending jobs to the cluster just run ./sm_script.sh
+# also if things have already run then it won't rerun the job
+
+import os, sys, pickle, re
+os.system('mkdir -p slurm_files ; ')
+
+N_partitions = 300 # set this for the number of partitions
+# N_partitions = 3 # testing
+BASE_PATH = '/net/shendure/vol10/projects/troym/ResQTL/nobackup/promoter_pilot/Neuron_1Mb_DE/'
+
+# this asks snakemake to generate the output file, then snakemake
+# looks for the rule that does this task.
+rule all:
+    input:
+        expand(BASE_PATH+"nobackup/{partition}_results.txt",
+            partition=range(1, N_partitions+1))
+
+# Snakemake realizes this is the rule to generate the output so it 
+# runs a job with this rule.
+rule run_gRNA_tests:
+    input:
+    output: BASE_PATH+"nobackup/{partition}_results.txt"
+    params:
+        error_out_file=BASE_PATH + "/slurm_files/tests_{partition}",
+        # can set run parameters here. I don't actually think you need
+        # that much memory, lower mem footprint means more jobs to run
+        run_time="8:00:00", cores="1", memory="20", job_name="tests"
+    shell:
+        # this just runs the Rscript we updated to take a partition
+        "Rscript {BASE_PATH}1mb_DE_Script_snakemake.R {wildcards.partition} ; "
