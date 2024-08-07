@@ -1,0 +1,627 @@
+---
+title: "CRISPRa-QTL_pilot_guide_design"
+author: "Troy McDiarmid"
+date: "30/06/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+##Loading libraries
+
+library(tidyverse)
+library(Biostrings)
+library(corrplot)
+library(ggridges)
+library(microseq)
+library(ShortRead)
+```
+
+
+```{r}
+##Reading guide files in from CRISPRi-QTL supplement
+
+Gasperini_at_scale_guides <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/CRISPa-QTL_pilot_sgRNA_seqs/Gasperini_etal_at_scale_enhancer_sgRNAs_0630_2021.csv") %>% 
+  separate(Spacer, into = c("Spacer_Start", "Spacer_Last_19"), sep = 1)
+  
+
+Gasperini_enhancer_gene_pairs <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/CRISPa-QTL_pilot_sgRNA_seqs/Gasperini_664_Enhancer_Gene_Pairs_0630_2021.csv")
+
+
+```
+
+
+```{r}
+##identifying hits from Molly's screen 
+
+Gasperini_at_scale_guides_hits_IDd <- Gasperini_at_scale_guides %>% 
+  left_join(Gasperini_enhancer_gene_pairs, by = "start.candidate_enhancer") %>% 
+  distinct(Spacer_Last_19, .keep_all = TRUE) 
+
+unique(Gasperini_at_scale_guides_hits_IDd$Category)
+
+##Selecting a random subset of hit guides
+
+set.seed(2)
+
+Gasperini_at_scale_guides_hits_only <- Gasperini_at_scale_guides_hits_IDd %>% 
+  filter(!is.na(high_confidence_subset)) %>% 
+  filter(Category %in% c("candidate_enhancer:picked_by_exploratory_submodular_selection", "candidate_enhancer:picked_by_model_built_from_pilot", "candidate_enhancer:repeated_from_pilot:top_gRNA_pair"))
+
+Gasperini_at_scale_guides_hits_only$Target_Site.x <- as.factor(Gasperini_at_scale_guides_hits_only$Target_Site.x)
+
+length(levels(Gasperini_at_scale_guides_hits_only$Target_Site.x))
+
+Gasperini_at_scale_guides_hits_only <-  Gasperini_at_scale_guides_hits_only %>% 
+  filter(Target_Site.x %in% sample(levels(Target_Site.x), 25))
+
+length(unique(Gasperini_at_scale_guides_hits_only$Target_Site.x))
+
+
+
+##Selecting controls
+
+Gasperini_at_scale_controls <- Gasperini_at_scale_guides_hits_IDd %>% 
+  filter(Category %in% c("NTC", "Positive_control_to_globin_locus"))
+
+
+##Selecting only for a random subset of 25 non-hit enhancer targets ~50 guides
+
+set.seed(2)
+
+Gasperini_at_scale_guides_non_hits <- Gasperini_at_scale_guides_hits_IDd %>% 
+  filter(Category %in% c("candidate_enhancer:picked_by_exploratory_submodular_selection", "candidate_enhancer:picked_by_model_built_from_pilot", "candidate_enhancer:repeated_from_pilot:alternative_gRNA_pair")) %>% 
+  filter(is.na(high_confidence_subset)) 
+
+Gasperini_at_scale_guides_non_hits$Target_Site.x <- as.factor(Gasperini_at_scale_guides_non_hits$Target_Site.x)
+
+length(levels(Gasperini_at_scale_guides_non_hits$Target_Site.x))
+
+Gasperini_at_scale_guides_non_hits <-  Gasperini_at_scale_guides_non_hits %>% 
+  filter(Target_Site.x %in% sample(levels(Target_Site.x), 25))
+
+length(unique(Gasperini_at_scale_guides$Target_Site.x))
+
+
+```
+
+
+
+```{r}
+##Reading in final risk genes selected for CRISPRa CRT
+
+NDD_338_Risk_Genes <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/CRISPa-QTL_pilot_sgRNA_seqs/Neurohub_NDD_Risk_Genes_Final.csv")
+
+
+##Reading in Horlbeck CRISPRa library
+
+Horlbeck_CRISPRaV2_Library <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/CRISPa-QTL_pilot_sgRNA_seqs/Horlbeck_CRISPRaV2_library.csv") %>% 
+  tail(-8) %>% 
+  dplyr::rename(gene_symbol = `gene`) %>% 
+  dplyr::rename(Spacer = `protospacer sequence`) %>% 
+  dplyr::rename(empirical_score = `empirical score`) %>% 
+  separate(Spacer, into = c("Spacer_Start", "Spacer_Last_19"), sep = 1)
+
+##Update NDD gene symbol annotation so they match in both dataframes 
+
+Horlbeck_CRISPRaV2_Library$gene_symbol[which(Horlbeck_CRISPRaV2_Library$gene_symbol == "SUV420H1")] <- "KMT5B"
+Horlbeck_CRISPRaV2_Library$gene_symbol[which(Horlbeck_CRISPRaV2_Library$gene_symbol == "KIAA2022")] <- "NEXMIF"
+Horlbeck_CRISPRaV2_Library$gene_symbol[which(Horlbeck_CRISPRaV2_Library$gene_symbol == "WHSC1")] <- "NSD2"
+
+##Selecting only guides targeting risk genes
+
+NDD_338_Risk_Genes_Horlbeck_Guides <- Horlbeck_CRISPRaV2_Library %>% 
+  left_join(NDD_338_Risk_Genes, by = "gene_symbol") %>% 
+  filter(!is.na(Satterstrom_ASD_102)) 
+
+unique(NDD_338_Risk_Genes_Horlbeck_Guides$`selection rank`)
+
+write_csv(NDD_338_Risk_Genes_Horlbeck_Guides, "/Users/troymcdiarmid/Documents/Neurohub/CRISPa-QTL_pilot_sgRNA_seqs/NDD_Risk_Genes_Horlbeck_CRISPRaQTL_pilot_guides.csv")
+
+#Filtering for our 9 pilot genes 
+
+NDD_9_Pilot_Risk_Genes_Horlbeck_Guides <- NDD_338_Risk_Genes_Horlbeck_Guides %>% 
+  filter(gene_symbol %in% c("TCF4", "FOXP1", "SCN2A", "CHD8", "BCL11A", "TBR1", "SHANK3", "SYNGAP1", "ANK2")) 
+
+##Looks like 1 NDD risk genes is missing from the Horlbeck library, which one?
+
+
+NDD_338_Risk_Genes_Horlbeck_Guides_symbol <- NDD_338_Risk_Genes_Horlbeck_Guides %>% 
+  select(gene_symbol)
+
+NDD_338_Risk_Genes_symbol <- NDD_338_Risk_Genes %>% 
+  select(gene_symbol)
+
+missing_genes <- setdiff(NDD_338_Risk_Genes_symbol, NDD_338_Risk_Genes_Horlbeck_Guides_symbol)
+
+##Looks like SUV420H1 and KMT5B are both listed in the 338 NDD risk genes when they are the same gene, meaning there is 337 targets. 
+
+##Selecitng a random subset of Horlbeck NTCs for 10% of our lib
+
+set.seed(2)
+
+Horlbeck_NTCs <- Horlbeck_CRISPRaV2_Library %>% 
+  filter(gene_symbol == "negative_control") %>% 
+  sample_n(50)
+
+##Selecitng a random subset of 20 Horlbeck positive controls for 10% of our lib
+
+set.seed(2)
+
+Horlbeck_TSS_Positive_Controls <- Horlbeck_CRISPRaV2_Library %>% 
+  filter(!is.na(empirical_score)) %>%
+  type_convert() %>% 
+  top_frac(0.25) %>% 
+  sample_n(30)
+
+```
+
+
+
+```{r}
+##Reading in output from Flashfry on 50 candidate promoters 
+
+Pilot_50p_Flashfry_guides <- read_tsv("/Users/troymcdiarmid/Documents/Neurohub/CRISPa-QTL_pilot_sgRNA_seqs/candidate_gRNAs_for_gencode.v38.basic.coding.transcripts.500bp_promoters.CRISPRa_QTL_PILOT.output.scored.distance.txt")
+
+Pilot_50p_Flashfry_guides <- Pilot_50p_Flashfry_guides %>% 
+  separate(dangerous_in_genome, into = c(NA, NA, "dangerous_in_genome", sep = "_GENOME=")) %>% 
+  select(!`_GENOME=`) %>% 
+  dplyr::rename(Spacer = target) %>% 
+  separate(Spacer, into = c("Spacer", "PAM"), sep = -3) %>% 
+  separate(Spacer, into = c("Spacer_Start", "Spacer_Last_19"), sep = 1) %>%  
+  type_convert()
+
+
+```
+
+```{r}
+##visualizing distribution of TSS distances
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = tss_distance)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("tss_distance_histo.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+##Visualizing Doench on target - higher scores are better
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = Doench2014OnTarget)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("DoenchOnTarget_histo_HigherBetter.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+
+##DoenchCFDMaxOT - lower better
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = DoenchCFD_maxOT)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("DoenchCFDmaxOT_histo_lower_better.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+##DoenchCFDMaxOT - higher better
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = DoenchCFD_specificityscore)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("DoenchCFD_specificity_score_histo_higher_better.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+##Hsu off target - higher better
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = Hsu2013)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("Hsu2013_histo_higher_scores_better.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+
+##Dangerous in genome - lower better
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = dangerous_in_genome)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  scale_x_log10() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("Dangerous_in_genome_histo_lower_scores_better.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+##Dangerous in genome - lower better
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = dangerous_in_genome)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  scale_x_log10() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("Dangerous_in_genome_histo_lower_scores_better.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+##Bases dif to closest hit - higher better 
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = basesDiffToClosestHit)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("basesDiffToClosestHit_higher_scores_better.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+##closest hit count - lower better 
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = closestHitCount)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("ClosestHit_count_lower_scores_better.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/") 
+
+#Otcount - lower better 
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = otCount)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("otCount_count_lower_scores_better.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/") 
+
+
+```
+
+
+```{r}
+##Correlation of scores 
+
+Corr_Matrix_Pilot_50p_Flashfry_guides <- Pilot_50p_Flashfry_guides %>% 
+  select(Doench2014OnTarget:DoenchCFD_specificityscore, dangerous_in_genome:closestHitCount, otCount, tss_distance)
+
+Corr_Matrix_Pilot_50p_Flashfry_guides <- cor(Corr_Matrix_Pilot_50p_Flashfry_guides, use = "complete.obs") 
+
+corrplot(Corr_Matrix_Pilot_50p_Flashfry_guides)
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = tss_distance, y = Doench2014OnTarget)) +
+  geom_hex() +
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24))
+ggsave("Tss_Distance_V_Doenchontarget_corr.jpeg", width = 6, height = 5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/") 
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = tss_distance, y = DoenchCFD_maxOT)) +
+  geom_hex() +
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24))
+ggsave("Tss_Distance_V_Doenchontarget_corr.jpeg", width = 6, height = 5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/") 
+
+Pilot_50p_Flashfry_guides <- Pilot_50p_Flashfry_guides %>% 
+  arrange(contig)
+
+ggplot(Pilot_50p_Flashfry_guides, aes(x = tss_distance, y = as_factor(contig))) + 
+  geom_density_ridges(aes(fill = as_factor(contig)), jittered_points = TRUE,
+    position = position_points_jitter(width = 0.05, height = 0),
+    point_shape = '|', point_alpha = 1, alpha = 0.7) +
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 24)) +
+theme(axis.text.y = element_text(family="Arial", colour = "black", size = 0)) 
+ggsave("NDD_All_Guides_Ridgline.jpeg", width = 8, height = 10, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+```
+
+
+
+```{r}
+
+##Code to filter out poly t' and/or dangerous GC
+
+  
+Pilot_50p_Flashfry_guides_noGCpolyT <- Pilot_50p_Flashfry_guides %>% 
+  filter(dangerous_polyT == "NONE") %>% 
+  filter(dangerous_GC == "NONE")
+
+unique(Pilot_50p_Flashfry_guides_noGCpolyT$contig)
+
+
+##Succesive rounds of relaxing location, on targets, and off targets to identify best guides per gene 
+
+##Round 1 using strict location, on target and off target thresholds followig Sanson et al (2018) meets all ideal criteria. 
+  
+Round_1_guides <- Pilot_50p_Flashfry_guides_noGCpolyT %>% 
+  filter(tss_distance > -150) %>% 
+  filter(tss_distance < -75) %>% 
+  filter(Doench2014OnTarget >= 0.2) %>%
+  filter(dangerous_in_genome <= 1) %>% 
+  filter(Hsu2013 > 80) %>% 
+  mutate(Round_Rank = rep("1",length(contig))) 
+
+##Following optimal window from Gilbert et al. 2014 slightly wider still with same other filters 
+
+Round_2_guides <- Pilot_50p_Flashfry_guides_noGCpolyT %>% 
+  filter(tss_distance > -400) %>% 
+  filter(tss_distance < -50) %>% 
+  filter(Doench2014OnTarget >= 0.2) %>%
+  filter(dangerous_in_genome <= 1) %>% 
+  filter(Hsu2013 > 80) %>% 
+  mutate(Round_Rank = rep("2",length(contig)))
+
+##Same window slightly lower Hsu2013 specificity scores
+
+Round_3_guides <- Pilot_50p_Flashfry_guides_noGCpolyT %>% 
+  filter(tss_distance > -400) %>% 
+  filter(tss_distance < -50) %>% 
+  filter(Doench2014OnTarget >= 0.2) %>%
+  filter(dangerous_in_genome <= 1) %>% 
+  filter(Hsu2013 > 50) %>% 
+  mutate(Round_Rank = rep("3",length(contig)))
+
+##Same window allowing 1 perfect match off target in the genome
+
+Round_4_guides <- Pilot_50p_Flashfry_guides_noGCpolyT %>% 
+  filter(tss_distance > -400) %>% 
+  filter(tss_distance < -50) %>% 
+  filter(Doench2014OnTarget >= 0.2) %>%
+  filter(dangerous_in_genome <= 2) %>%
+  filter(Hsu2013 > 50) %>% 
+  mutate(Round_Rank = rep("4",length(contig)))
+
+
+##Removing position requirement and relaxing off targets to capture 4 guides for all promoters
+
+Round_5_guides <- Pilot_50p_Flashfry_guides_noGCpolyT %>% 
+  filter(Doench2014OnTarget >= 0.2) %>%
+  filter(dangerous_in_genome <= 2) %>%
+  filter(Hsu2013 > 10) %>% 
+  filter(DoenchCFD_maxOT < 0.95) %>% 
+  mutate(Round_Rank = rep("5",length(contig))) 
+
+##Combining each list of guides from the successively relaxed criteria into one list, using highest on target scores to break ties. 
+
+Final_Promoter_Guides <- rbind(Round_1_guides, Round_2_guides, Round_3_guides, Round_4_guides, Round_5_guides) %>% 
+  arrange(Round_Rank, desc(Doench2014OnTarget)) %>% 
+  distinct(Spacer_Last_19, .keep_all = TRUE)
+
+Final_Promoter_Guides$Final_Round_and_On_Target_Rank <- seq.int(nrow(Final_Promoter_Guides))
+
+Final_Promoter_Guides <- Final_Promoter_Guides %>% 
+  group_by(contig) %>% 
+  top_n(-4, Final_Round_and_On_Target_Rank)
+
+length(unique(Final_Promoter_Guides$target))
+
+Final_Promoter_Guides <- Final_Promoter_Guides %>% 
+  arrange(contig)
+
+
+ggplot(Final_Promoter_Guides, aes(x = tss_distance, y = as_factor(contig))) + 
+  geom_density_ridges(aes(fill = as_factor(contig)), jittered_points = TRUE,
+    position = position_points_jitter(width = 0.05, height = 0),
+    point_shape = '|', point_alpha = 1, alpha = 0.7) +
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 24)) +
+theme(axis.text.y = element_text(family="Arial", colour = "black", size = 0)) 
+ggsave("NDD_Final_Guides_Ridgline.jpeg", width = 8, height = 10, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+ggplot(Final_Promoter_Guides, aes(x = Doench2014OnTarget)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  scale_x_continuous(limits = c(0, 1)) +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("NDD_Final_Guides_DoenchOnTarget.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+ggplot(Final_Promoter_Guides, aes(x = Hsu2013)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  scale_x_continuous(limits = c(0, 100)) +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("NDD_Final_Guides_Hsu2013.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+
+##Get rid of any of the overlapping guides 
+
+Overlapping_guides <- left_join(Final_Promoter_Guides, NDD_9_Pilot_Risk_Genes_Horlbeck_Guides, by = "Spacer_Last_19") %>%
+  filter(!is.na(Wang_TD_2)) 
+
+
+##Combine everything to get final guide list 
+
+Spacer_Only_Gasperini_at_scale_guides_hits_only <- Gasperini_at_scale_guides_hits_only %>% 
+  select(Spacer_Start, Spacer_Last_19, Target_Site.x) %>% 
+  dplyr::rename(Target = Target_Site.x) %>% 
+  mutate(Source = rep("Gasperini_etal_at_scale_CRISPRi_enhancer_hit", length(Spacer_Start)))
+Spacer_Only_NDD_9_Pilot_Risk_Genes_Horlbeck_Guides <- NDD_9_Pilot_Risk_Genes_Horlbeck_Guides %>% 
+  select(Spacer_Start, Spacer_Last_19, gene_symbol) %>% 
+  dplyr::rename(Target = gene_symbol) %>%
+  mutate(Source = rep("Horlbeck_etal_CRISPRa_guides_for_9_NDD_pilot_risk_genes", length(Spacer_Start)))
+Spacer_Only_Horlbeck_NTCs <- Horlbeck_NTCs %>% 
+  select(Spacer_Start, Spacer_Last_19, gene_symbol) %>% 
+  dplyr::rename(Target = gene_symbol) %>%  
+  mutate(Source = rep("Horlbeck_etal_NTC", length(Spacer_Start)))
+Spacer_Only_Horlbeck_TSS_Positive_Controls <- Horlbeck_TSS_Positive_Controls %>% 
+  select(Spacer_Start, Spacer_Last_19, gene_symbol) %>% 
+  dplyr::rename(Target = gene_symbol) %>%  
+  mutate(Source = rep("Horlbeck_etal_TSS_Positive_Control", length(Spacer_Start)))
+Spacer_Only_Final_Promoter_Guides <- Final_Promoter_Guides %>% 
+  ungroup() %>% 
+  select(Spacer_Start, Spacer_Last_19, contig) %>% 
+  dplyr::rename(Target = contig) %>% 
+  mutate(Source = rep("CRISPRaQTL_Flashfry_pipeline", length(Spacer_Start)))
+Spacer_Only_Gasperini_at_scale_guides_non_hits <- Gasperini_at_scale_guides_non_hits %>% 
+  select(Spacer_Start, Spacer_Last_19, Target_Site.x) %>%
+  dplyr::rename(Target = Target_Site.x) %>%
+  mutate(Source = rep("Gasperini_etal_at_scale_CRISPRi_enhancer_nonhit", length(Spacer_Start)))
+
+Final_Pilot_Spacers <- rbind(Spacer_Only_Gasperini_at_scale_guides_hits_only, Spacer_Only_Final_Promoter_Guides, Spacer_Only_NDD_9_Pilot_Risk_Genes_Horlbeck_Guides, Spacer_Only_Horlbeck_NTCs, Spacer_Only_Horlbeck_TSS_Positive_Controls, Spacer_Only_Gasperini_at_scale_guides_non_hits) %>% 
+  distinct(Spacer_Last_19, .keep_all = TRUE) 
+
+write_csv(Final_Pilot_Spacers, "/Users/troymcdiarmid/Documents/Neurohub/CRISPa-QTL_pilot_sgRNA_seqs/CRISPRaQTL_pilot_guides.csv")
+
+```
+
+
+```{r}
+
+##Clean environment first for it to work. 
+
+##Creating a list of our spacers to subset the reads with (i.e. identify reads with a perfect match to the spacer)
+
+Final_Pilot_Spacers <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/CRISPa-QTL_pilot_sgRNA_seqs/CRISPRaQTL_pilot_guides.csv")
+
+Seqs_To_Match <- c(Final_Pilot_Spacers$Spacer_Last_19)
+
+```
+
+
+```{r}
+
+##Reading in the pilot lib fastq file (R1 only)
+
+PiggyFlex_Pilot_Fastq <- readFastq("/Users/troymcdiarmid/Documents/Neurohub/PiggyFlex_Pilot_Lib_FASTQs/GF_sample_mix_S1_R1_001.fastq.gz")
+
+Pilot_Lib_Spacer_Match_Seqs <- as.data.frame(sread(PiggyFlex_Pilot_Fastq)) 
+Pilot_Lib_Spacer_Match_Seqs$Read_Length = str_length(Pilot_Lib_Spacer_Match_Seqs$x)
+
+Pilot_Lib_Spacer_Match_Seqs <- as.data.frame(sread(PiggyFlex_Pilot_Fastq)) %>% 
+  separate(x, into = c("Spacer", "Rest"), sep = 19) %>% 
+  filter(Spacer %in% Seqs_To_Match) %>% 
+  separate(Rest, into = c("Scaffold", "Partial_GFP_End"), sep = 78) %>% 
+  separate(Partial_GFP_End, into = c("Partial_GFP_End", "Barcode"), sep = 4) %>% 
+  separate(Barcode, into = c("Barcode", "Rest"), sep = 10) 
+
+##Seeing how many spacers are in our library
+
+length(unique(Pilot_Lib_Spacer_Match_Seqs$Spacer))
+
+##Counting how many perfect match reads there are for each spacer 
+
+Pilot_Lib_Spacer_Match_Seqs_Counts <- Pilot_Lib_Spacer_Match_Seqs %>% 
+  dplyr::count(Spacer) %>% 
+  dplyr::rename(Spacer_Read_Count = n)
+
+##Plot of the number of reads for each spacer using R1 only 
+
+ggplot(Pilot_Lib_Spacer_Match_Seqs_Counts, aes(x = Spacer_Read_Count)) +
+  geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  scale_x_log10() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("CRISRPaQTL_Pilot_Lib_Spacer_Read_Count.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+##Looking at the barcode read count for those perfect spacer matched reads
+
+Pilot_Lib_Spacer_Match_BC_Seqs_Counts <- Pilot_Lib_Spacer_Match_Seqs %>% 
+  dplyr::count(Barcode) %>% 
+  dplyr::rename(Barcode_Read_Count = n) 
+
+ggplot(Pilot_Lib_Spacer_Match_BC_Seqs_Counts, aes(x = Barcode_Read_Count)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  scale_x_log10() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("CRISRPaQTL_Pilot_Lib_Barcode_Read_Count.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+### Find all spacer-barcode pairs and count the number of occurances then filter for barcodes with >100 reads
+
+Pilot_Lib_Spacer_Match_Seqs_group_counts <- Pilot_Lib_Spacer_Match_Seqs %>%
+  group_by(Spacer) %>% 
+  dplyr::count(Barcode) %>% 
+  filter(n > 100) 
+
+##Then find any non-unique pairs and remove them from the pairings
+
+Non_Unique_Barcodes <- data.frame(table(Pilot_Lib_Spacer_Match_Seqs_group_counts$Barcode)) %>% 
+  filter(Freq > 1) %>% 
+  dplyr::rename(Barcode = Var1) %>% 
+  mutate_if(is.factor, as.character)
+  
+Non_Unique_BCs_To_Match <- c(Non_Unique_Barcodes$Barcode)
+
+Pilot_Lib_Spacer_Match_Seqs_group_counts <- Pilot_Lib_Spacer_Match_Seqs_group_counts %>% 
+  filter(!Barcode %in% Non_Unique_BCs_To_Match) 
+
+Unique_Barcodes_Check_Table <- data.frame(table(Pilot_Lib_Spacer_Match_Seqs_group_counts$Barcode))
+
+##See how many unique spacer-barcode pairs we have
+
+length(unique(Pilot_Lib_Spacer_Match_Seqs_group_counts$Barcode))
+
+##Count the number of barcodes per spacer and plot it
+  
+n_barcodes_per_spacer <- Pilot_Lib_Spacer_Match_Seqs_group_counts %>%
+  dplyr::count(Spacer) 
+
+ggplot(n_barcodes_per_spacer, aes(x = n)) +
+   geom_histogram(color="#999999", fill="#999999") +  
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+ggsave("CRISRPaQTL_Pilot_Lib_n_barcodes_per_spacer.jpeg", width = 7, height = 5.5, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+write_csv(Pilot_Lib_Spacer_Match_Seqs_group_counts, "/Users/troymcdiarmid/Documents/Neurohub/pilot_promoter_bed_&_fasta_files/CRISPRaQTL_Spacer_Barcode_Associations.csv")
+
+```
+
