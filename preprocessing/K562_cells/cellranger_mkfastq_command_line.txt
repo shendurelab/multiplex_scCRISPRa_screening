@@ -1,0 +1,3 @@
+cellranger mkfastq --id=cellranger_mkfastq_output \
+--run=/net/shendure/vol9/seq/NEXTSEQ/211123_VH00123_133_AAAHG2HHV/ \
+--csv=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/K562_data/cellranger_input_files/Sample_Sheet.csv

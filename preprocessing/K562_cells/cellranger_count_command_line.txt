@@ -1,0 +1,11 @@
+## lane 1, VP64 replicate 1 ##
+cellranger count --id=cellranger_count_VP64_rep_1_output --libraries=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/K562_data/cellranger_input_files/libraries_VP64_rep_1.csv --transcriptome=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/transcriptome_reference/refdata-cellranger-GRCh38-3.0.0/ --feature-ref=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/K562_data/cellranger_input_files/feature_reference.csv --expect-cells=20000 --localmem=200
+
+## lane 2, VP64 replicate 2 ##
+cellranger count --id=cellranger_count_VP64_rep_2_output --libraries=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/K562_data/cellranger_input_files/libraries_VP64_rep_2.csv --transcriptome=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/transcriptome_reference/refdata-cellranger-GRCh38-3.0.0/ --feature-ref=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/K562_data/cellranger_input_files/feature_reference.csv --expect-cells=20000 --localmem=200
+
+## lane 3, VPR replicate 1 ##
+cellranger count --id=cellranger_count_VPR_rep_1_output --libraries=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/K562_data/cellranger_input_files/libraries_VPR_rep_1.csv --transcriptome=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/transcriptome_reference/refdata-cellranger-GRCh38-3.0.0/ --feature-ref=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/K562_data/cellranger_input_files/feature_reference.csv --expect-cells=20000 --localmem=200
+
+## lane 4, VPR replicate 2 ##
+cellranger count --id= cellranger_count_VPR_rep_2_output --libraries=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/K562_data/cellranger_input_files/libraries_VPR_rep_2.csv --transcriptome=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/transcriptome_reference/refdata-cellranger-GRCh38-3.0.0/ --feature-ref=/net/shendure/vol10/www/content/members/CRISPRa_QTL_website/public/data/K562_data/cellranger_input_files/feature_reference.csv --expect-cells=20000 --localmem=200
