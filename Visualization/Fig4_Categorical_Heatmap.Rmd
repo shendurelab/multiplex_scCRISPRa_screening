@@ -1,0 +1,335 @@
+---
+title: "Fig4_Categorical_Heatmap"
+author: "Troy McDiarmid"
+date: "2023-10-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+
+```
+
+
+
+```{r}
+##Reading in K562 SCEPTRE hits
+
+K562_SCEPTRE_Hits <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/K562_Results/Two_Sided_Test_Discovery_Set.csv") %>% 
+  dplyr::filter(log_2_fold_change > 0) %>% 
+  dplyr::rename(gRNA_Name = grna_group)
+
+
+##Reading in original FM hits
+
+K562_FM_Hits <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/Original_FM_K562_Hits.csv") %>% 
+  dplyr::filter(avg_log2FC > 0) 
+
+##Full join
+
+K562_All_Hits <- K562_SCEPTRE_Hits %>% 
+  full_join(K562_FM_Hits, by = "gRNA_Name")
+
+##Labeling enhancers
+
+Enhancer_K562_All_Hits <- K562_All_Hits %>% 
+  dplyr::filter(grepl("chr", gRNA_Name)) 
+
+Promoter_K562_All_Hits <- K562_All_Hits  %>% 
+  dplyr::filter(!grepl("chr", gRNA_Name)) 
+
+Enhancer_K562_All_Hits$CRE_Class <- "Enhancer"
+Promoter_K562_All_Hits$CRE_Class <- "Promoter"
+
+K562_All_Hits <- rbind(Promoter_K562_All_Hits, Enhancer_K562_All_Hits) 
+
+
+##Add ID number
+
+K562_All_Hits$ID <- seq.int(nrow(K562_All_Hits))
+
+##Mutate to make a categorical SCEPTRE hit p-value
+
+K562_All_Hits <- K562_All_Hits %>% 
+  mutate(SCEPTRE_Hit = p_value)
+
+K562_All_Hits$SCEPTRE_Hit[K562_All_Hits$SCEPTRE_Hit > 0] <- 1
+K562_All_Hits$SCEPTRE_Hit[is.na(K562_All_Hits$SCEPTRE_Hit)] <- 0
+
+##Mutate to make a categorical FM hit p-value
+
+K562_All_Hits <- K562_All_Hits %>% 
+  mutate(FM_Hit = BH_Corrected_Empirical_p_val)
+
+K562_All_Hits$FM_Hit[K562_All_Hits$FM_Hit > 0] <- 1
+K562_All_Hits$FM_Hit[is.na(K562_All_Hits$FM_Hit)] <- 0
+
+##Replace SCEPTRE p-value NAs with 1
+
+K562_All_Hits$p_value[is.na(K562_All_Hits$p_value)] <- 1
+
+##Labeling enhancers
+
+Enhancer_K562_All_Hits <- K562_All_Hits %>% 
+  dplyr::filter(grepl("chr", gRNA_Name)) 
+
+Promoter_K562_All_Hits <- K562_All_Hits  %>% 
+  dplyr::filter(!grepl("chr", gRNA_Name)) 
+
+Enhancer_K562_All_Hits$CRE_Class <- "Enhancer"
+Promoter_K562_All_Hits$CRE_Class <- "Promoter"
+
+K562_All_Hits <- rbind(Promoter_K562_All_Hits, Enhancer_K562_All_Hits) 
+```
+
+```{r}
+##Reading in Neuron SCEPTRE hits
+
+Neuron_SCEPTRE_Hits <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/Neuron_Results/Two_Sided_Test_Discovery_Set.csv") %>% 
+  dplyr::filter(log_2_fold_change > 0) %>% 
+  dplyr::rename(gRNA_Name = grna_group)
+
+
+##Reading in original FM hits
+
+Neuron_FM_Hits <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/Original_FM_Neuron_Hits.csv") %>% 
+  dplyr::filter(avg_log2FC > 0) 
+
+##Full join
+
+Neuron_All_Hits <- Neuron_SCEPTRE_Hits %>% 
+  full_join(Neuron_FM_Hits, by = "gRNA_Name")
+
+
+##Add ID number
+
+Neuron_All_Hits$ID <- seq.int(nrow(Neuron_All_Hits))
+
+##Mutate to make a categorical SCEPTRE hit p-value
+
+Neuron_All_Hits <- Neuron_All_Hits %>% 
+  mutate(SCEPTRE_Hit = p_value)
+
+Neuron_All_Hits$SCEPTRE_Hit[Neuron_All_Hits$SCEPTRE_Hit > 0] <- 1
+Neuron_All_Hits$SCEPTRE_Hit[is.na(Neuron_All_Hits$SCEPTRE_Hit)] <- 0
+
+##Mutate to make a categorical FM hit p-value
+
+Neuron_All_Hits <- Neuron_All_Hits %>% 
+  mutate(FM_Hit = BH_Corrected_Empirical_p_val)
+
+Neuron_All_Hits$FM_Hit[Neuron_All_Hits$FM_Hit > 0] <- 1
+Neuron_All_Hits$FM_Hit[is.na(Neuron_All_Hits$FM_Hit)] <- 0
+
+##Replace SCEPTRE p-value NAs with 1
+
+Neuron_All_Hits$p_value[is.na(Neuron_All_Hits$p_value)] <- 1 
+
+##Labeling enhancers
+
+Enhancer_Neuron_All_Hits <- Neuron_All_Hits %>% 
+  dplyr::filter(grepl("chr", gRNA_Name)) 
+
+Promoter_Neuron_All_Hits <- Neuron_All_Hits  %>% 
+  dplyr::filter(!grepl("chr", gRNA_Name)) 
+
+Enhancer_Neuron_All_Hits$CRE_Class <- "Enhancer"
+Promoter_Neuron_All_Hits$CRE_Class <- "Promoter"
+
+Neuron_All_Hits <- rbind(Promoter_Neuron_All_Hits, Enhancer_Neuron_All_Hits) 
+```
+
+
+```{r}
+##Adding if hit is predicted cell type specific
+
+K562_All_Hits_Cell_Specific_Hits <- K562_All_Hits %>% 
+  dplyr::filter(!gRNA_Name %in% Neuron_All_Hits$gRNA_Name) 
+
+K562_All_Hits_Shared_Hits <- K562_All_Hits %>% 
+  dplyr::filter(gRNA_Name %in% Neuron_All_Hits$gRNA_Name) 
+
+K562_All_Hits_Cell_Specific_Hits$Cell_Specific <- "1"
+K562_All_Hits_Shared_Hits$Cell_Specific <- "0"
+
+K562_All_Hits <- rbind(K562_All_Hits_Cell_Specific_Hits, K562_All_Hits_Shared_Hits) 
+
+K562_All_Hits$Cell_Specific <- as.numeric(K562_All_Hits$Cell_Specific)
+
+##Adding if hit is singleton validated 
+
+Singleton_Validated_Hit_gRNAs <- c("BCL11A_41_promoter", "TCF4_329_promoter", "DNMT3B_83_TSS_pos_ctrl", "FOXP1_148_Flashfry_promoter", "TBR1_313_promoter", "chr12.1559_411_Gasperini_enhancer", "chr9.871_490_Gasperini_enhancer")  
+
+K562_All_Hits_Singleton_Validated <- K562_All_Hits %>% 
+  dplyr::filter(gRNA_Name %in% Singleton_Validated_Hit_gRNAs)
+
+K562_All_Hits_Not_Singleton_Validated <- K562_All_Hits %>% 
+  dplyr::filter(!gRNA_Name %in% Singleton_Validated_Hit_gRNAs)
+
+K562_All_Hits_Singleton_Validated$Singleton_Validated <- "1"
+K562_All_Hits_Not_Singleton_Validated$Singleton_Validated <- "0"
+
+K562_All_Hits <- rbind(K562_All_Hits_Singleton_Validated, K562_All_Hits_Not_Singleton_Validated) 
+
+K562_All_Hits$Singleton_Validated <- as.numeric(K562_All_Hits$Singleton_Validated)
+
+
+```
+
+
+```{r}
+
+ggplot(K562_All_Hits, aes(reorder(ID, -p_value), y = 1, fill= CRE_Class)) + 
+  geom_tile(color = "white",
+            lwd = 1,
+            linetype = 1) +
+  scale_fill_manual(values=c("#56B4E9", "#E69F00")) +
+  theme_void() +
+  theme(legend.position="none")  
+
+
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/K562_Hit_Heatmap_CRE_Class.jpeg", width = 10, height = 0.1)
+
+ggplot(K562_All_Hits, aes(reorder(ID, -p_value), y = 1, fill= SCEPTRE_Hit)) + 
+  geom_tile(color = "white",
+            lwd = 1,
+            linetype = 1) +
+  scale_fill_gradientn(colours = c("white", "black")) +
+  theme_void() +
+  theme(legend.position="none") 
+
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/K562_Hit_Heatmap_SCEPTRE_Hit.jpeg", width = 10, height = 0.1)
+
+
+ggplot(K562_All_Hits, aes(reorder(ID, -p_value), y = 1, fill= FM_Hit)) + 
+  geom_tile(color = "white",
+            lwd = 1,
+            linetype = 1) +
+  scale_fill_gradientn(colours = c("white", "black")) +
+  theme_void() +
+  theme(legend.position="none") 
+
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/K562_Hit_Heatmap_OG_FM_Hit.jpeg", width = 10, height = 0.1)
+  
+ggplot(K562_All_Hits, aes(reorder(ID, -p_value), y = 1, fill= Cell_Specific)) + 
+  geom_tile(color = "white",
+            lwd = 1,
+            linetype = 1) +
+  scale_fill_gradientn(colours = c("white", "black")) +
+  theme_void() +
+  theme(legend.position="none") 
+
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/K562_Hit_Heatmap_Predicted_Cell_Specific_Hit.jpeg", width = 10, height = 0.1)
+
+ggplot(K562_All_Hits, aes(reorder(ID, -p_value), y = 1, fill= Singleton_Validated)) + 
+  geom_tile(color = "white",
+            lwd = 1,
+            linetype = 1) +
+  scale_fill_gradientn(colours = c("white", "black")) +
+  theme_void() +
+  theme(legend.position="none") 
+
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/K562_Hit_Heatmap_Singleton_Validated_Upregulation.jpeg", width = 10, height = 0.1)
+
+  
+```
+
+
+
+```{r}
+
+##Adding if hit is predicted cell type specific
+
+Neuron_All_Hits_Cell_Specific_Hits <- Neuron_All_Hits %>% 
+  dplyr::filter(!gRNA_Name %in% K562_All_Hits$gRNA_Name) 
+
+Neuron_All_Hits_Shared_Hits <- Neuron_All_Hits %>% 
+  dplyr::filter(gRNA_Name %in% K562_All_Hits$gRNA_Name) 
+
+Neuron_All_Hits_Cell_Specific_Hits$Cell_Specific <- "1"
+Neuron_All_Hits_Shared_Hits$Cell_Specific <- "0"
+
+Neuron_All_Hits <- rbind(Neuron_All_Hits_Cell_Specific_Hits, Neuron_All_Hits_Shared_Hits) 
+
+Neuron_All_Hits$Cell_Specific <- as.numeric(Neuron_All_Hits$Cell_Specific)
+
+##Adding if hit is singleton validated 
+
+Singleton_Validated_Hit_gRNAs <- c("BCL11A_41_promoter", "TCF4_329_promoter", "DNMT3B_83_TSS_pos_ctrl", "TBR1_313_promoter", "chr6.2134_473_Gasperini_NTC")  
+
+Neuron_All_Hits_Singleton_Validated <- Neuron_All_Hits %>% 
+  dplyr::filter(gRNA_Name %in% Singleton_Validated_Hit_gRNAs)
+
+Neuron_All_Hits_Not_Singleton_Validated <- Neuron_All_Hits %>% 
+  dplyr::filter(!gRNA_Name %in% Singleton_Validated_Hit_gRNAs)
+
+Neuron_All_Hits_Singleton_Validated$Singleton_Validated <- "1"
+Neuron_All_Hits_Not_Singleton_Validated$Singleton_Validated <- "0"
+
+Neuron_All_Hits <- rbind(Neuron_All_Hits_Singleton_Validated, Neuron_All_Hits_Not_Singleton_Validated) 
+
+Neuron_All_Hits$Singleton_Validated <- as.numeric(Neuron_All_Hits$Singleton_Validated)
+
+```
+
+
+```{r}
+
+ggplot(Neuron_All_Hits, aes(reorder(ID, -p_value), y = 1, fill= CRE_Class)) + 
+  geom_tile(color = "white",
+            lwd = 1,
+            linetype = 1) +
+  scale_fill_manual(values=c("#56B4E9", "#E69F00")) +
+  theme_void() +
+  theme(legend.position="none")  
+
+
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Neuron_Hit_Heatmap_CRE_Class.jpeg", width = 3.936, height = 0.1)
+
+ggplot(Neuron_All_Hits, aes(reorder(ID, -p_value), y = 1, fill= SCEPTRE_Hit)) + 
+  geom_tile(color = "white",
+            lwd = 1,
+            linetype = 1) +
+  scale_fill_gradientn(colours = c("white", "black")) +
+  theme_void() +
+  theme(legend.position="none") 
+
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Neuron_Hit_Heatmap_SCEPTRE_Hit.jpeg", width = 3.936, height = 0.1)
+
+
+ggplot(Neuron_All_Hits, aes(reorder(ID, -p_value), y = 1, fill= FM_Hit)) + 
+  geom_tile(color = "white",
+            lwd = 1,
+            linetype = 1) +
+  scale_fill_gradientn(colours = c("white", "black")) +
+  theme_void() +
+  theme(legend.position="none") 
+
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Neuron_Hit_Heatmap_OG_FM_Hit.jpeg", width = 3.936, height = 0.1)
+  
+ggplot(Neuron_All_Hits, aes(reorder(ID, -p_value), y = 1, fill= Cell_Specific)) + 
+  geom_tile(color = "white",
+            lwd = 1,
+            linetype = 1) +
+  scale_fill_gradientn(colours = c("white", "black")) +
+  theme_void() +
+  theme(legend.position="none") 
+
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Neuron_Hit_Heatmap_Predicted_Cell_Specific_Hit.jpeg", width = 3.936, height = 0.1)
+
+ggplot(Neuron_All_Hits, aes(reorder(ID, -p_value), y = 1, fill= Singleton_Validated)) + 
+  geom_tile(color = "white",
+            lwd = 1,
+            linetype = 1) +
+  scale_fill_gradientn(colours = c("white", "black")) +
+  theme_void() +
+  theme(legend.position="none") 
+
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Neuron_Hit_Heatmap_Singleton_Validated_Upregulation.jpeg", width = 3.936, height = 0.1)
+
+  
+
+```
+

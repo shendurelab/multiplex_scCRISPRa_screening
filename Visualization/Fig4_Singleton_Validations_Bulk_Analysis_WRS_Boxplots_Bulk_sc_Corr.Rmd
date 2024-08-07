@@ -1,0 +1,1664 @@
+---
+title: "Singleton_Validations_Bulk_Analysis"
+author: "Troy McDiarmid"
+date: "2023-09-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+##Loading required libraries
+
+library(tidyverse)
+library(ensembldb)
+library(tximport)
+library(ggrepel)
+library(EnsDb.Hsapiens.v86)
+library(biomaRt)
+library(ggfortify)
+
+```
+
+
+```{r}
+# get files
+files <- list.files(paste0('/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/kallisto_output/'), recursive=T,
+    pattern='abundance.tsv', full.names=T)
+names(files) <- str_match(files, pattern='output/(.+)_S[0-9]+/abundance.tsv')[,2]
+
+# opening and importing the files
+tx2gene0 <- transcripts(EnsDb.Hsapiens.v86, return.type="DataFrame")
+tx2gene <- data.frame(TXNAME=tx2gene0$tx_name, GENEID=tx2gene0$gene_id)
+txi <- tximport(files, type = "kallisto", tx2gene = tx2gene, ignoreTxVersion=T, countsFromAbundance = c("scaledTPM"))
+
+
+
+All_Samples_Counts_DF <- txi$counts %>% as.data.frame %>% tibble::rownames_to_column('gene') %>%
+    pivot_longer(cols=!gene)
+
+```
+
+```{r}
+##Separating replicate and cell type into variables and combining into condition/replicate factors. 
+
+All_Samples_Counts_DF <- All_Samples_Counts_DF %>% 
+    separate(name, into = c("Cell_Type", "garbage", "gRNA_Number", "Garbagee", "Replicate", "gRNA_Paired_Target_Gene"), sep = "_")  %>%
+    separate(Cell_Type, into = c("garbageee", "Cell_Type"), sep = "/")  %>%
+    unite("Condition",  c("Cell_Type", "gRNA_Number", "gRNA_Paired_Target_Gene"), remove = FALSE) %>% 
+    unite("Condition_Rep",  c("Cell_Type", "gRNA_Number", "gRNA_Paired_Target_Gene", "Replicate"), remove = FALSE) %>%
+    dplyr::select(!c(garbage, Garbagee, garbageee))
+
+write_csv(All_Samples_Counts_DF, "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/CRISPRa_Singleton_Validation_TPM.csv")
+
+```
+
+
+```{r}
+##Read in data and Calculate mean + SD
+
+All_Samples_Counts_DF <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/CRISPRa_Singleton_Validation_TPM.csv")
+
+
+##Calculate mean and sd
+
+All_Samples_Counts_DF <- All_Samples_Counts_DF %>%
+    group_by(Condition, gene) %>% 
+    mutate(Mean_Abundance = mean(value)) %>% 
+    mutate(SD_Abundance = sd(value))
+```
+
+
+```{r}
+#Visuaizing effects on target genes
+
+##BCL11A
+
+Target_Gene  <- "BCL11A"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000119866")
+
+ggplot(Target_DF, aes(x = value, y = Condition)) +
+  geom_point() +
+  geom_boxplot() +
+  theme_classic() 
+
+Target_Gene  <- "TCF4"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000196628")
+
+ggplot(Target_DF, aes(x = value, y = Condition)) +
+  geom_point() +
+  geom_boxplot() +
+  theme_classic() 
+
+Target_Gene  <- "FOXP1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000114861")
+
+ggplot(Target_DF, aes(x = value, y = Condition)) +
+  geom_point() +
+  geom_boxplot() +
+  theme_classic() 
+
+Target_Gene  <- "DNMT3B"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000088305")
+
+ggplot(Target_DF, aes(x = value, y = Condition)) +
+  geom_point() +
+  geom_boxplot() +
+  theme_classic() 
+
+
+
+Target_Gene  <- "TBR1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000136535")
+
+ggplot(Target_DF, aes(x = value, y = Condition)) +
+  geom_point() +
+  geom_boxplot() +
+  theme_classic() 
+
+ggplot(Target_DF, aes(x = value, y = Condition, colour = Condition, fill = Condition)) +  
+  theme_classic() +
+  geom_point(colour = "black") +
+  scale_fill_manual(values=c("#D2D5D5", "#D2D5D5", "#D2D5D5", "#D2D5D5", "#D2D5D5", "#56B4E5", "#D2D5D5", "#D2D5D5", "#D2D5D5", "#D2D5D5", "#D2D5D5", "#D2D5D5", "#D2D5D5", "#56B4E5", "#D2D5D5", "#D2D5D5")) +
+  geom_boxplot(colour = "black", width = 0.7, lwd =0.5, outlier.shape = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.5)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.5)) +
+  theme(axis.ticks.length=unit(.1, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  labs(title = "", x = "", y = "") 
+  ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/TBR1_All_Conditions.jpeg", width = 7, height = 4.5)
+  
+
+
+
+Target_Gene  <- "ANXA1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000135046")
+
+ggplot(Target_DF, aes(x = value, y = Condition)) +
+  geom_point() +
+  geom_boxplot() +
+  theme_classic() 
+
+Target_Gene  <- "HMGA1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000137309")
+
+ggplot(Target_DF, aes(x = value, y = Condition)) +
+  geom_point() +
+  geom_boxplot() +
+  theme_classic() 
+
+Target_Gene  <- "ASIC1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000110881")
+
+ggplot(Target_DF, aes(x = value, y = Condition)) +
+  geom_point() +
+  geom_boxplot() +
+  theme_classic() 
+```
+
+
+
+
+```{r}
+
+##K562 BCL11A DE testing
+
+Target_Gene  <- "BCL11A"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000119866")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#E69F00")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/K562_BCL11A.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+
+```
+
+
+```{r}
+##K562 TCF4 DE testing
+
+Target_Gene  <- "TCF4"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000196628")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#E69F00")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  ylim(0,23) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/K562_TCF4.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+```
+
+
+
+```{r}
+##K562 ANXA1 DE testing
+
+Target_Gene  <- "ANXA1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000135046")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#56B4E9")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  ylim(0,115) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/K562_ANXA1.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+```
+
+
+```{r}
+##K562 DNMT3B DE testing
+
+Target_Gene  <- "DNMT3B"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000088305")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#E69F00")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/K562_DNMT3B.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+```
+
+```{r}
+
+##K562 FOXP1 DE testing
+
+Target_Gene  <- "FOXP1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000114861")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#E69F00")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  ylim(0,70) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/K562_FOXP1.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+
+```
+
+```{r}
+
+##K562 TBR1 DE testing
+
+Target_Gene  <- "TBR1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000136535")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#E69F00")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/K562_TBR1.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+
+```
+
+```{r}
+
+##K562 ASIC1 DE testing
+
+Target_Gene  <- "ASIC1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000110881")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#56B4E9")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  labs(title = "", x = "", y = "")  
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/K562_ASIC1.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+
+```
+
+
+
+```{r}
+##K562 HMGA1 DE testing
+
+Target_Gene  <- "HMGA1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000137309")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#56B4E9")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  ylim(0,115) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/K562_HMGA1.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+```
+
+
+
+```{r}
+
+##Neuron BCL11A DE testing
+
+Target_Gene  <- "BCL11A"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000119866")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#E69F00")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  ylim(0,35) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Neuron_BCL11A.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+
+```
+
+
+```{r}
+##Neuron TCF4 DE testing
+
+Target_Gene  <- "TCF4"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000196628")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#E69F00")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  ylim(0,100) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Neuron_TCF4.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+```
+
+
+
+```{r}
+##Neuron ANXA1 DE testing
+
+Target_Gene  <- "ANXA1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000135046")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#56B4E9")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  labs(title = "", x = "", y = "")  
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Neuron_ANXA1.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+```
+
+
+```{r}
+##Neuron DNMT3B DE testing
+
+Target_Gene  <- "DNMT3B"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000088305")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#E69F00")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  ylim(0,0.6) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Neuron_DNMT3B.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+```
+
+```{r}
+
+##Neuron FOXP1 DE testing
+
+Target_Gene  <- "FOXP1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000114861")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#E69F00")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  ylim(0,150) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Neuron_FOXP1.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+
+```
+
+```{r}
+
+##Neuron TBR1 DE testing
+
+Target_Gene  <- "TBR1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000136535")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#E69F00")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Neuron_TBR1.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+
+```
+
+```{r}
+
+##Neuron ASIC1 DE testing
+
+Target_Gene  <- "ASIC1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000110881")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#56B4E9")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Neuron_ASIC1.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+
+```
+
+
+
+```{r}
+##Neuron HMGA1 DE testing
+
+Target_Gene  <- "HMGA1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000137309")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Target_v_Mean_DF <- rbind(Control_Mean_DF, Target_gRNA_DF)
+
+
+set.seed(4)
+
+ggplot(Target_v_Mean_DF, aes(x = Targeting, y = value, colour = Targeting, fill = Targeting)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#999999", "#56B4E9")) +
+  geom_boxplot(colour = "black", width = 0.5, lwd =0.7, outlier.shape = NA) +
+  geom_jitter(size = 4, colour = "black", width = 0.05, height = 0) +
+  theme(axis.line = element_line(colour = 'black', size = 0.9)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.9)) +
+  theme(axis.ticks.length=unit(.25, "cm"), legend.position = "none") +
+  theme(axis.text = element_blank()) +
+  labs(title = "", x = "", y = "") 
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Neuron_HMGA1.jpeg", width = 3, height = 5.25)
+
+wilcox.test(value ~ Targeting, data = Target_v_Mean_DF)
+```
+
+
+
+```{r}
+##Calculating K562 log2FCs
+
+##BCL11A
+
+Target_Gene  <- "BCL11A"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000119866")
+
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "K562"
+
+BCL11A_K562_Log2FC <- Log2FC
+
+
+##TCF4
+
+Target_Gene  <- "TCF4"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000196628")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "K562"
+
+TCF4_K562_Log2FC <- Log2FC
+
+
+##FOXP1
+
+Target_Gene  <- "FOXP1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000114861")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "K562"
+
+FOXP1_K562_Log2FC <- Log2FC
+
+
+##DNMT3B
+
+Target_Gene  <- "DNMT3B"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000088305")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "K562"
+
+DNMT3B_K562_Log2FC <- Log2FC
+
+
+
+##TBR1
+
+Target_Gene  <- "TBR1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000136535")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "K562"
+
+TBR1_K562_Log2FC <- Log2FC
+
+
+##ANXA1
+
+Target_Gene  <- "ANXA1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000135046")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "K562"
+
+ANXA1_K562_Log2FC <- Log2FC
+
+
+##HMGA1
+
+Target_Gene  <- "HMGA1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000137309")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "K562"
+
+HMGA1_K562_Log2FC <- Log2FC
+
+
+##ASIC1 
+
+Target_Gene  <- "ASIC1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000110881")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "K562") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "K562"
+
+ASIC1_K562_Log2FC <- Log2FC
+
+##Assign the relevant gRNAs
+
+BCL11A_K562_Log2FC$target_guide <- "BCL11A_41_promoter"
+TCF4_K562_Log2FC$target_guide <- "TCF4_329_promoter"
+DNMT3B_K562_Log2FC$target_guide <- "DNMT3B_83_TSS_pos_ctrl"
+FOXP1_K562_Log2FC$target_guide <- "FOXP1_148_Flashfry_promoter"
+TBR1_K562_Log2FC$target_guide <- "TBR1_313_promoter"
+ASIC1_K562_Log2FC$target_guide <- "chr12.1559_411_Gasperini_enhancer"
+HMGA1_K562_Log2FC$target_guide <-"chr6.2134_473_Gasperini_NTC"
+ANXA1_K562_Log2FC$target_guide <-"chr9.871_490_Gasperini_enhancer"
+ 
+##Binding them all
+
+K562_Log2FC <- rbind(BCL11A_K562_Log2FC, TCF4_K562_Log2FC, FOXP1_K562_Log2FC, DNMT3B_K562_Log2FC, TBR1_K562_Log2FC, ANXA1_K562_Log2FC, HMGA1_K562_Log2FC, ASIC1_K562_Log2FC)
+
+```
+
+
+
+
+
+```{r}
+
+##Calculating Neuron log2FCs
+
+##BCL11A
+
+Target_Gene  <- "BCL11A"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000119866")
+
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "Neuron"
+
+BCL11A_Neuron_Log2FC <- Log2FC
+
+
+##TCF4
+
+Target_Gene  <- "TCF4"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000196628")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "Neuron"
+
+TCF4_Neuron_Log2FC <- Log2FC
+
+
+##FOXP1
+
+Target_Gene  <- "FOXP1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000114861")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "Neuron"
+
+FOXP1_Neuron_Log2FC <- Log2FC
+
+
+##DNMT3B
+
+Target_Gene  <- "DNMT3B"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000088305")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "Neuron"
+
+DNMT3B_Neuron_Log2FC <- Log2FC
+
+
+
+##TBR1
+
+Target_Gene  <- "TBR1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000136535")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "Neuron"
+
+TBR1_Neuron_Log2FC <- Log2FC
+
+
+##ANXA1
+
+Target_Gene  <- "ANXA1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000135046")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "Neuron"
+
+ANXA1_Neuron_Log2FC <- Log2FC
+
+
+##HMGA1
+
+Target_Gene  <- "HMGA1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000137309")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "Neuron"
+
+HMGA1_Neuron_Log2FC <- Log2FC
+
+
+##ASIC1 
+
+Target_Gene  <- "ASIC1"
+
+Target_DF <- All_Samples_Counts_DF %>% dplyr::filter(gene == "ENSG00000110881")
+
+Target_gRNA_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>% 
+    dplyr::filter(gRNA_Paired_Target_Gene == Target_Gene)
+
+
+Control_Mean_DF <- Target_DF %>% 
+    dplyr::filter(Cell_Type == "Neuron") %>%  
+    dplyr::filter(!gRNA_Paired_Target_Gene == Target_Gene) %>%
+    ungroup()
+
+
+Target_gRNA_DF$Targeting <- "Test"
+Control_Mean_DF$Targeting <- "Control"
+
+Log2FC <- log2((mean(Target_gRNA_DF$value))/(mean(Control_Mean_DF$value)))
+Log2FC <- as.data.frame(Log2FC)
+Log2FC$RNA_Seq_Modality <- "Bulk"
+Log2FC$Target_Gene <- Target_Gene
+Log2FC$Cell_Type <- "Neuron"
+
+ASIC1_Neuron_Log2FC <- Log2FC
+
+##Assign the relevant gRNAs
+
+BCL11A_Neuron_Log2FC$target_guide <- "BCL11A_41_promoter"
+TCF4_Neuron_Log2FC$target_guide <- "TCF4_329_promoter"
+DNMT3B_Neuron_Log2FC$target_guide <- "DNMT3B_83_TSS_pos_ctrl"
+FOXP1_Neuron_Log2FC$target_guide <- "FOXP1_148_Flashfry_promoter"
+TBR1_Neuron_Log2FC$target_guide <- "TBR1_313_promoter"
+ASIC1_Neuron_Log2FC$target_guide <- "chr12.1559_411_Gasperini_enhancer"
+HMGA1_Neuron_Log2FC$target_guide <-"chr6.2134_473_Gasperini_NTC"
+ANXA1_Neuron_Log2FC$target_guide <-"chr9.871_490_Gasperini_enhancer"
+
+##Binding them all
+
+Neuron_Log2FC <- rbind(BCL11A_Neuron_Log2FC, TCF4_Neuron_Log2FC, FOXP1_Neuron_Log2FC, DNMT3B_Neuron_Log2FC, TBR1_Neuron_Log2FC, ANXA1_Neuron_Log2FC, HMGA1_Neuron_Log2FC, ASIC1_Neuron_Log2FC)
+
+
+```
+
+
+
+```{r}
+##Correlating bulk with single cell log2FCs 
+
+##Reading in two-sided SCEPTRE hits 
+
+SCEPTRE_K562_Hits <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/K562_Results/Two_Sided_Discovery_Result.csv", col_names = TRUE) 
+SCEPTRE_Neuron_Hits <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/Neuron_Results/Two_Sided_Discovery_Result.csv", col_names = TRUE)
+
+##Rename columns in sceptre hits for joining
+
+SCEPTRE_K562_Hits <- SCEPTRE_K562_Hits %>%
+  dplyr::rename(gRNA_Name = grna_group, Target_Gene_Ensembl_Id = response_id, SCEPTRE_Log_2_FC = log_2_fold_change, SCEPTRE_p_value = p_value)
+
+SCEPTRE_Neuron_Hits <- SCEPTRE_Neuron_Hits %>%
+  dplyr::rename(gRNA_Name = grna_group, Target_Gene_Ensembl_Id = response_id, SCEPTRE_Log_2_FC = log_2_fold_change, SCEPTRE_p_value = p_value)
+
+
+##Convert ensembl gene id's to HGNC symbols 
+
+##For K562
+
+mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+genes <- SCEPTRE_K562_Hits$Target_Gene_Ensembl_Id
+G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id", "hgnc_symbol"),values=genes,mart= mart)
+
+G_list <- G_list %>% 
+  dplyr::rename(Target_Gene_Ensembl_Id = ensembl_gene_id)
+
+SCEPTRE_K562_Hits <- SCEPTRE_K562_Hits %>% 
+  left_join(G_list, by = "Target_Gene_Ensembl_Id")
+
+
+##For Neurons 
+
+genes <- SCEPTRE_Neuron_Hits$Target_Gene_Ensembl_Id
+G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id", "hgnc_symbol"),values=genes,mart= mart)
+
+G_list <- G_list %>% 
+  dplyr::rename(Target_Gene_Ensembl_Id = ensembl_gene_id)
+
+SCEPTRE_Neuron_Hits <- SCEPTRE_Neuron_Hits %>% 
+  left_join(G_list, by = "Target_Gene_Ensembl_Id") 
+
+##Add cell type and combine the two sets of sceptre hits
+
+SCEPTRE_K562_Hits$Cell_Type <- "K562"
+SCEPTRE_Neuron_Hits$Cell_Type <- "Neuron"
+
+SCEPTRE_Hits <- rbind(SCEPTRE_K562_Hits, SCEPTRE_Neuron_Hits)
+
+##Select relevant columns 
+
+SCEPTRE_Hits <- SCEPTRE_Hits %>% 
+  dplyr::select(hgnc_symbol, gRNA_Name, SCEPTRE_Log_2_FC, Cell_Type)
+
+##Create Target gene pair cell type column for joining
+
+SCEPTRE_Hits <- SCEPTRE_Hits %>%
+   unite(Target_Gene_Pair_Cell_Type, gRNA_Name, hgnc_symbol, Cell_Type, sep= "_", remove = FALSE) %>% 
+   dplyr::select(Target_Gene_Pair_Cell_Type, SCEPTRE_Log_2_FC, hgnc_symbol)
+
+
+
+```
+
+```{r}
+
+##Create target gene pair column for joining 
+
+Bulk_Log2FC <- rbind(K562_Log2FC, Neuron_Log2FC)
+
+Bulk_Log2FC <- Bulk_Log2FC %>% 
+  unite(Target_Gene_Pair_Cell_Type, target_guide, Target_Gene, Cell_Type, sep= "_", remove = FALSE) %>% 
+  dplyr::select(Target_Gene_Pair_Cell_Type, Log2FC, Cell_Type, Target_Gene)
+
+
+##Join and correlate 
+
+
+Bulk_and_SC_Log2FC <- Bulk_Log2FC %>% 
+    left_join(SCEPTRE_Hits, by = "Target_Gene_Pair_Cell_Type")
+
+
+ggplot(Bulk_and_SC_Log2FC, aes(x = Log2FC, y = SCEPTRE_Log_2_FC, colour = Cell_Type)) +
+  geom_point(size = 3) +
+  geom_abline(slope=1, intercept=0, linetype='dashed') +
+  scale_colour_manual(values = c("black", "#999999")) +
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) +
+  theme(axis.text = element_blank()) +
+  xlim(-1,4.5) +
+  ylim(-1,4.5) 
+ggsave("SCEPTRE_log2FC_vs_Singleton_Bulk_Log2FC.jpeg", width = 7, height = 6, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+cor.test(Bulk_and_SC_Log2FC$Log2FC, Bulk_and_SC_Log2FC$SCEPTRE_Log_2_FC, method = "pearson")
+cor.test(Bulk_and_SC_Log2FC$Log2FC, Bulk_and_SC_Log2FC$SCEPTRE_Log_2_FC, method = "spearman")
+
+
+```
+
+
+```{r}
+
+##Correlate with raw psuedobulk log2FC 
+
+pseudobulked_log2FC <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/pseudobulked_log2FC_v4.csv") %>% 
+  unite(Target_Gene_Pair_Cell_Type, gRNA, target_gene, Cell_Type, sep= "_", remove = FALSE) %>% 
+   dplyr::select(Target_Gene_Pair_Cell_Type, log2FC) %>% 
+  dplyr::filter(Target_Gene_Pair_Cell_Type %in% Bulk_Log2FC$Target_Gene_Pair_Cell_Type) %>% 
+  mutate(log2FC = as.numeric(log2FC))
+
+
+
+Bulk_and_SC_Log2FC <- Bulk_Log2FC %>% 
+    left_join(pseudobulked_log2FC, by = "Target_Gene_Pair_Cell_Type") %>% 
+  dplyr::filter(!log2FC == "#NAME?")
+
+
+ggplot(Bulk_and_SC_Log2FC, aes(x = Log2FC, y = log2FC, colour = Cell_Type)) +
+  geom_point(size = 3) +
+  geom_abline(slope=1, intercept=0, linetype='dashed') +
+  scale_colour_manual(values = c("black", "#999999")) +
+  theme_classic() +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = "", x = "", y = "") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) +
+  theme(axis.text = element_blank()) +
+  xlim(-1,6.5) +
+  ylim(-1,6.5) 
+ggsave("Pseudobulk_log2FC_vs_Singleton_Bulk_Log2FC.jpeg", width = 7, height = 6, path = "/Users/troymcdiarmid/Documents/Neurohub/Figs/")
+
+cor.test(Bulk_and_SC_Log2FC$Log2FC, Bulk_and_SC_Log2FC$log2FC, method = "pearson")
+cor.test(Bulk_and_SC_Log2FC$Log2FC, Bulk_and_SC_Log2FC$log2FC, method = "spearman")
+
+
+
+
+```
+
+
+
+```{r}
+##gRNA vs. control cells log2 TPM correlations
+
+##Making correlation plot for CRISPRa
+
+Condition_Filter <- "K562_21_TCF4"
+Target_Gene <- "ENSG00000196628"
+Cell_Type_Filter <- "K562"
+
+##Filter for target condition 
+
+Target_Condition_Abundance <- All_Samples_Counts_DF %>%
+  dplyr::filter(Condition == Condition_Filter) %>% 
+  group_by(gene) %>%
+  distinct(gene, .keep_all = TRUE) %>% 
+  dplyr::select(gene, Mean_Abundance)
+
+##Isolate all other groups
+
+Control_Abundance <- All_Samples_Counts_DF %>% 
+  dplyr::filter(Cell_Type == Cell_Type_Filter) %>% 
+  dplyr::filter(!Condition %in% Condition_Filter) %>%  
+  group_by(gene) %>% 
+  mutate(Mean_Abundance = mean(value)) %>% 
+  mutate(SD_Abundance = sd(value)) %>% 
+  distinct(gene, .keep_all = TRUE) %>% 
+  dplyr::select(gene, Mean_Abundance) %>% 
+  dplyr::rename(Control_Mean_Abundance = Mean_Abundance, Control_Gene = gene)
+
+
+##Combine
+
+Target_V_Control_Abundance <- cbind(Target_Condition_Abundance, Control_Abundance)
+
+Target_V_Control_Abundance_Target <- Target_V_Control_Abundance %>% 
+  dplyr::filter(gene == Target_Gene)
+Target_V_Control_Abundance_All_Other_Genes <- Target_V_Control_Abundance %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_V_Control_Abundance_Target$Target <- "TRUE"
+Target_V_Control_Abundance_All_Other_Genes$Target <- "FALSE"
+
+Target_V_Control_Abundance <- rbind(Target_V_Control_Abundance_All_Other_Genes, Target_V_Control_Abundance_Target)
+
+##Calculate log2 TPM
+
+Target_V_Control_Abundance_Target <- Target_V_Control_Abundance %>% 
+  dplyr::filter(gene == Target_Gene)
+Target_V_Control_Abundance_All_Other_Genes <- Target_V_Control_Abundance %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_V_Control_Abundance_All_Other_Genes <- as.data.frame(Target_V_Control_Abundance_All_Other_Genes) 
+
+Target_V_Control_Abundance <- rbind(Target_V_Control_Abundance_All_Other_Genes, Target_V_Control_Abundance_Target)
+
+Target_V_Control_Abundance <- Target_V_Control_Abundance %>% 
+  mutate(log2_Mean_Abundance = log2(1+Mean_Abundance)) %>% 
+  mutate(log2_Control_Mean_Abundance = log2(1+Control_Mean_Abundance))
+
+
+##Plotting
+
+ggplot(Target_V_Control_Abundance, aes(x = log2_Control_Mean_Abundance, y = log2_Mean_Abundance, colour = Target, size = Target)) +
+  geom_point(alpha = 0.1, stroke = NA) +
+  theme_classic() +
+  scale_color_manual(values=c("#999999", "#56B4E9")) +
+  scale_size_manual(values=c(1, 4)) +
+  theme(axis.line = element_line(colour = 'black', size = 0.7)) +
+  theme(axis.ticks.y = element_line(colour = "black", size = 0.7)) +
+  theme(axis.ticks.length=unit(.25, "cm")) +
+  scale_x_continuous(limits = c(0.1,12)) +
+  scale_y_continuous(limits = c(0.1,12)) +
+  theme(axis.text = element_text(family="Arial", colour = "black", size = 24)) +
+  labs(title = "", x = "", y = "")  
+ggsave("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/K562_TCF4_corr.jpeg", width = 7, height = 5) 
+
+
+
+```
+
+```{r}
+##PCA 
+
+pca_df <- All_Samples_Counts_DF %>%
+  ungroup() %>% 
+  dplyr::select(gene, Condition_Rep, value) %>% 
+  type_convert()
+
+pca_df <- pca_df %>% 
+  pivot_wider(names_from = Condition_Rep, values_from = value) %>% 
+  column_to_rownames("gene") %>% 
+  as.matrix() %>% 
+  t()
+
+pca_res <- prcomp(pca_df)
+
+
+
+autoplot(pca_res)
+
+
+
+pc_eigenvalues <- pca_res$sdev^2
+
+pc_eigenvalues <- tibble(PC = factor(1:length(pc_eigenvalues)), 
+                         variance = pc_eigenvalues) %>% 
+  # add a new column with the percent variance
+  mutate(pct = variance/sum(variance)*100) %>% 
+  # add another column with the cumulative variance explained
+  mutate(pct_cum = cumsum(pct))
+
+# print the result
+pc_eigenvalues
+
+
+pc_eigenvalues %>% 
+  ggplot(aes(x = PC)) +
+  geom_col(aes(y = pct)) +
+  geom_line(aes(y = pct_cum, group = 1)) + 
+  geom_point(aes(y = pct_cum)) +
+  labs(x = "Principal component", y = "Fraction variance explained")
+
+
+pc_scores <- pca_res$x
+
+pc_scores <- pc_scores %>% 
+  # convert to a tibble retaining the sample names as a new column
+  as_tibble(rownames = "sample")
+
+# print the result
+
+
+pc_scores %>% 
+  # create the plot
+  ggplot(pc_scores, aes(x = PC1,  y = PC2, colour = as.factor(sample))) +
+           geom_point()
+
+```
+
