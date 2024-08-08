@@ -1,6 +1,7 @@
 # multiplex_scCRISPRa_screening
 Code, scripts, and workflows to analyze data and regenerate figures from Chardon, McDiarmid et al. Nature Communications 2024
 
+### Citation
 If you use this code, please cite this paper.
 
 Chardon, McDiarmid et al., Multiplex, single-cell CRISPRa screening for cell type specific regulatory elements, Nature Communications (2024).
