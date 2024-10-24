@@ -1,0 +1,1480 @@
+---
+title: "Singleton_Validations_Bulk_Analysis"
+author: "Troy McDiarmid"
+date: "2023-09-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+##Loading required libraries
+
+library(tidyverse)
+library(ensembldb)
+library(tximport)
+library(ggrepel)
+library(EnsDb.Hsapiens.v86)
+library(DESeq2)
+library(Gviz)
+library(GenomicRanges)
+library(biomaRt)
+
+```
+
+
+```{r}
+# get files
+files <- list.files(paste0('/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/K562_kallisto_output/'), recursive=T,
+    pattern='abundance.tsv', full.names=T)
+names(files) <- str_match(files, pattern='output/(.+)_S[0-9]+/abundance.tsv')[,2]
+
+# opening and importing the files
+tx2gene0 <- transcripts(EnsDb.Hsapiens.v86, return.type="DataFrame")
+tx2gene <- data.frame(TXNAME=tx2gene0$tx_name, GENEID=tx2gene0$gene_id)
+txi <- tximport(files, type = "kallisto", tx2gene = tx2gene, ignoreTxVersion=T, countsFromAbundance = c("scaledTPM"))
+
+
+
+All_Samples_Counts_DF <- txi$counts %>% as.data.frame %>% tibble::rownames_to_column('gene') %>%
+    pivot_longer(cols=!gene)
+
+```
+
+
+```{r}
+
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/BCL11A_DESeq2.csv"
+Plot_File_Name <- "BCL11A_Volcano.jpeg"
+Target_Gene <- "ENSG00000119866"
+Target_Gene_HGNC <- "BCL11A"
+
+##Construct sample table
+sampleTable <- data.frame(condition = factor(rep(c("K562_ANXA1", "K562_DNMT3B", "K562_BCL11A", "K562_TCF4", "K562_FOXP1", "K562_TBR1", "K562_ASIC1", "K562_HMGA1"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+#Construct sample table
+
+sampleTable <- data.frame(condition = factor(rep(c("Control", "Control", "K562_BCL11A", "Control", "Control", "Control", "Control", "Control"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) 
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+
+```
+
+
+```{r}
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ANXA1_DESeq2.csv"
+Plot_File_Name <- "ANXA1_Volcano.jpeg"
+Target_Gene <- "ENSG00000135046"
+Target_Gene_HGNC <- "ANXA1"
+
+##Construct sample table
+sampleTable <- data.frame(condition = factor(rep(c("K562_ANXA1", "K562_DNMT3B", "K562_BCL11A", "K562_TCF4", "K562_FOXP1", "K562_TBR1", "K562_ASIC1", "K562_HMGA1"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+#Construct sample table
+
+sampleTable <- data.frame(condition = factor(rep(c("K562_ANXA1", "Control", "Control", "Control", "Control", "Control", "Control", "Control"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) 
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+```
+
+
+```{r}
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TCF4_DESeq2.csv"
+Plot_File_Name <- "TCF4_Volcano.jpeg"
+Target_Gene <- "ENSG00000196628"
+Target_Gene_HGNC <- "TCF4"
+
+##Construct sample table
+sampleTable <- data.frame(condition = factor(rep(c("K562_ANXA1", "K562_DNMT3B", "K562_BCL11A", "K562_TCF4", "K562_FOXP1", "K562_TBR1", "K562_ASIC1", "K562_HMGA1"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+#Construct sample table
+
+sampleTable <- data.frame(condition = factor(rep(c("Control", "Control", "Control", "K562_TCF4", "Control", "Control", "Control", "Control"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+write_csv(Discovery_Results, File_Name)
+
+Discovery_Results$plot_pval[Discovery_Results$plot_pval > 5] <- 5
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) +
+  xlim(-6,6) +
+  ylim(0,5)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+```
+
+```{r}
+
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/FOXP1_DESeq2.csv"
+Plot_File_Name <- "FOXP1_Volcano.jpeg"
+Target_Gene <- "ENSG00000114861"
+Target_Gene_HGNC <- "FOXP1"
+
+##Construct sample table
+sampleTable <- data.frame(condition = factor(rep(c("K562_ANXA1", "K562_DNMT3B", "K562_BCL11A", "K562_TCF4", "K562_FOXP1", "K562_TBR1", "K562_ASIC1", "K562_HMGA1"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+#Construct sample table
+
+sampleTable <- data.frame(condition = factor(rep(c("Control", "Control", "Control", "Control", "K562_FOXP1", "Control", "Control", "Control"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) 
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+
+
+
+```
+
+```{r}
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/DNMT3B_DESeq2.csv"
+Plot_File_Name <- "DNMT3B_Volcano.jpeg"
+Target_Gene <- "ENSG00000088305"
+Target_Gene_HGNC <- "DNMT3B"
+
+##Construct sample table
+sampleTable <- data.frame(condition = factor(rep(c("K562_ANXA1", "K562_DNMT3B", "K562_BCL11A", "K562_TCF4", "K562_FOXP1", "K562_TBR1", "K562_ASIC1", "K562_HMGA1"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+#Construct sample table
+
+sampleTable <- data.frame(condition = factor(rep(c("Control", "K562_DNMT3B", "Control", "Control", "Control", "Control", "Control", "Control"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) 
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+
+
+
+```
+
+```{r}
+
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TBR1_DESeq2.csv"
+Plot_File_Name <- "TBR1_Volcano.jpeg"
+Target_Gene <- "ENSG00000136535"
+Target_Gene_HGNC <- "TBR1"
+
+##Construct sample table
+sampleTable <- data.frame(condition = factor(rep(c("K562_ANXA1", "K562_DNMT3B", "K562_BCL11A", "K562_TCF4", "K562_FOXP1", "K562_TBR1", "K562_ASIC1", "K562_HMGA1"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+#Construct sample table
+
+sampleTable <- data.frame(condition = factor(rep(c("Control", "Control", "Control", "Control", "Control", "K562_TBR1", "Control", "Control"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+Intended_Target_Results$plot_pval <- 0
+Intended_Target_Results$log2FoldChange <- 0
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, fill = "#D2D5D5", colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) +
+  xlim(-6,6)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+
+
+```
+
+
+```{r}
+
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/HMGA1_DESeq2.csv"
+Plot_File_Name <- "HMGA1_Volcano.jpeg"
+Target_Gene <- "ENSG00000137309"
+Target_Gene_HGNC <- "HMGA1"
+
+##Construct sample table
+sampleTable <- data.frame(condition = factor(rep(c("K562_ANXA1", "K562_DNMT3B", "K562_BCL11A", "K562_TCF4", "K562_FOXP1", "K562_TBR1", "K562_ASIC1", "K562_HMGA1"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+#Construct sample table
+
+sampleTable <- data.frame(condition = factor(rep(c("Control", "Control", "Control", "Control", "Control", "Control", "Control", "K562_HMGA1"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) 
+  xlim(-7.5,7.5)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+
+```
+
+
+```{r}
+
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ASIC1_DESeq2.csv"
+Plot_File_Name <- "ASIC1_Volcano.jpeg"
+Target_Gene <- "ENSG00000110881"
+Target_Gene_HGNC <- "ASIC1"
+
+##Construct sample table
+sampleTable <- data.frame(condition = factor(rep(c("K562_ANXA1", "K562_DNMT3B", "K562_BCL11A", "K562_TCF4", "K562_FOXP1", "K562_TBR1", "K562_ASIC1", "K562_HMGA1"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+#Construct sample table
+
+sampleTable <- data.frame(condition = factor(rep(c("Control", "Control", "Control", "Control", "Control", "Control", "K562_ASIC1", "Control"), each = 3)))
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) +
+  xlim(-8,8)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+
+```
+
+
+
+```{r}
+##Organizing text file output 
+
+##BCL11A_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/BCL11A_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "BCL11A_K562"
+
+BCL11A_K562 <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##ANXA1_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ANXA1_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "ANXA1_K562"
+
+ANXA1_K562 <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##FOXP1_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/FOXP1_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "FOXP1_K562"
+
+FOXP1_K562 <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##ASIC1_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ASIC1_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "ASIC1_K562"
+
+ASIC1_K562 <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##TBR1_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TBR1_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "TBR1_K562"
+
+TBR1_K562 <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##TCF4_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TCF4_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "TCF4_K562"
+
+TCF4_K562 <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##HMGA1_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/HMGA1_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "HMGA1_K562"
+
+HMGA1_K562 <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##DNMT3B_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/DNMT3B_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "DNMT3B_K562"
+
+DNMT3B_K562 <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+K562_Data <- rbind(BCL11A_K562, ANXA1_K562, ASIC1_K562, DNMT3B_K562, FOXP1_K562, HMGA1_K562, TCF4_K562, TBR1_K562)
+
+##Converting gene names
+
+mart <- useMart("ensembl", host="https://useast.ensembl.org")
+mart <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", host="https://useast.ensembl.org")
+genes <- K562_Data$gene
+G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","start_position","end_position","strand","hgnc_symbol","chromosome_name"), values=genes, mart= mart)
+
+
+G_list <- G_list %>% 
+  dplyr::rename(gene = ensembl_gene_id) %>% 
+  dplyr::select(gene, hgnc_symbol)
+
+K562_Data <- K562_Data  %>% 
+  left_join(G_list, by = "gene")
+
+write_csv(K562_Data, "/Users/troymcdiarmid/Downloads/K562_DEGs.txt")
+
+```
+
+
+```{r}
+##Organizing text file output 
+
+##BCL11A_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/BCL11A_Neuron_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "BCL11A_Neuron"
+
+BCL11A_Neuron <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##ANXA1_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ANXA1_Neuron_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "ANXA1_Neuron"
+
+ANXA1_Neuron <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##FOXP1_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/FOXP1_Neuron_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "FOXP1_Neuron"
+
+FOXP1_Neuron <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##ASIC1_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ASIC1_Neuron_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "ASIC1_Neuron"
+
+ASIC1_Neuron <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##TBR1_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TBR1_Neuron_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "TBR1_Neuron"
+
+TBR1_Neuron <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##TCF4_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TCF4_Neuron_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "TCF4_Neuron"
+
+TCF4_Neuron <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##HMGA1_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/HMGA1_Neuron_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "HMGA1_Neuron"
+
+HMGA1_Neuron <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+##DNMT3B_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/DNMT3B_Neuron_DESeq2.csv") %>% 
+  dplyr::filter(Significant == TRUE) 
+
+Data_Set$TargetGene_CellType <- "DNMT3B_Neuron"
+
+DNMT3B_Neuron <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange)
+
+Neuron_Data <- rbind(BCL11A_Neuron, ANXA1_Neuron, ASIC1_Neuron, DNMT3B_Neuron, FOXP1_Neuron, HMGA1_Neuron, TCF4_Neuron, TBR1_Neuron)
+
+##Converting gene names
+
+mart <- useMart("ensembl", host="https://useast.ensembl.org")
+mart <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", host="https://useast.ensembl.org")
+genes <- Neuron_Data$gene
+G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","start_position","end_position","strand","hgnc_symbol","chromosome_name"), values=genes, mart= mart)
+
+
+G_list <- G_list %>% 
+  dplyr::rename(gene = ensembl_gene_id) %>% 
+  dplyr::select(gene, hgnc_symbol)
+
+Neuron_Data <- Neuron_Data  %>% 
+  left_join(G_list, by = "gene")
+
+write_csv(Neuron_Data, "/Users/troymcdiarmid/Downloads/Neuron_DEGs.txt")
+```
+
+```{r}
+##Final_DEG_Table
+
+Final_DEG_Table <- rbind(K562_Data, Neuron_Data)
+
+Final_DEG_Table <- Final_DEG_Table %>% 
+  dplyr::select(TargetGene_CellType, gene, hgnc_symbol, log2FoldChange, pvalue)
+
+Final_DEG_Table <- Final_DEG_Table %>%
+  dplyr::rename(ENSG_ID = gene) %>%
+  dplyr::rename(HGNC_Symbol = hgnc_symbol) %>%
+  dplyr::rename(Log_2_Fold_Change = log2FoldChange) %>%
+  dplyr::rename(P_Value = pvalue)
+
+Final_DEG_Table <- Final_DEG_Table %>%
+  separate(TargetGene_CellType, into = c("Primary_Target_Gene", "Cell_Context"))
+
+write_csv(Final_DEG_Table, "/Users/troymcdiarmid/Downloads/Table_S16_Singleton_Validation_Differentially_Expressed_Genes.csv")
+
+```
+
+
+```{r}
+
+##Organizing text file output 
+
+##BCL11A_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/BCL11A_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "BCL11A_K562"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+BCL11A_K562_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+BCL11A_K562_TOP100DOWN <- DOWN %>%
+  head(100)
+
+
+##ANXA1_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ANXA1_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "ANXA1_K562"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+ANXA1_K562_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+ANXA1_K562_TOP100DOWN <- DOWN %>%
+  head(100)
+
+##ASIC1_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ASIC1_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "ASIC1_K562"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+ASIC1_K562_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+ASIC1_K562_TOP100DOWN <- DOWN %>%
+  head(100)
+
+
+##DNMT3B_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/DNMT3B_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "DNMT3B_K562"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+DNMT3B_K562_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+DNMT3B_K562_TOP100DOWN <- DOWN %>%
+  head(100)
+
+##FOXP1_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/FOXP1_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "FOXP1_K562"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+FOXP1_K562_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+FOXP1_K562_TOP100DOWN <- DOWN %>%
+  head(100)
+
+##HMGA1_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/HMGA1_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "HMGA1_K562"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+HMGA1_K562_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+HMGA1_K562_TOP100DOWN <- DOWN %>%
+  head(100)
+
+##TCF4_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TCF4_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "TCF4_K562"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+TCF4_K562_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+TCF4_K562_TOP100DOWN <- DOWN %>%
+  head(100)
+
+##TBR1_K562
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TBR1_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "TBR1_K562"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+TBR1_K562_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+TBR1_K562_TOP100DOWN <- DOWN %>%
+  head(100)
+
+
+##bindign and converting
+
+K562_Data <- rbind(BCL11A_K562_TOP100UP, BCL11A_K562_TOP100DOWN, ANXA1_K562_TOP100UP, ANXA1_K562_TOP100DOWN, ASIC1_K562_TOP100UP, ASIC1_K562_TOP100DOWN, DNMT3B_K562_TOP100UP, DNMT3B_K562_TOP100DOWN, FOXP1_K562_TOP100UP, FOXP1_K562_TOP100DOWN, HMGA1_K562_TOP100UP, HMGA1_K562_TOP100DOWN, TCF4_K562_TOP100UP, TCF4_K562_TOP100DOWN, TBR1_K562_TOP100UP, TBR1_K562_TOP100DOWN)
+
+##Converting gene names
+
+mart <- useMart("ensembl", host="https://useast.ensembl.org")
+mart <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", host="https://useast.ensembl.org")
+genes <- K562_Data$gene
+G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","start_position","end_position","strand","hgnc_symbol","chromosome_name"), values=genes, mart= mart)
+
+
+G_list <- G_list %>% 
+  dplyr::rename(gene = ensembl_gene_id) %>% 
+  dplyr::select(gene, hgnc_symbol)
+
+K562_Data <- K562_Data  %>% 
+  left_join(G_list, by = "gene")
+
+write_csv(K562_Data, "/Users/troymcdiarmid/Downloads/K562_Top100_UP_DOWN_DEGs.txt")
+
+```
+
+
+```{r}
+
+##Organizing text file output 
+
+##BCL11A_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/BCL11A_Neuron_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "BCL11A_Neuron"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+BCL11A_Neuron_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+BCL11A_Neuron_TOP100DOWN <- DOWN %>%
+  head(100)
+
+
+##ANXA1_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ANXA1_Neuron_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "ANXA1_Neuron"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+ANXA1_Neuron_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+ANXA1_Neuron_TOP100DOWN <- DOWN %>%
+  head(100)
+
+##ASIC1_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ASIC1_Neuron_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "ASIC1_Neuron"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+ASIC1_Neuron_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+ASIC1_Neuron_TOP100DOWN <- DOWN %>%
+  head(100)
+
+
+##DNMT3B_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/DNMT3B_Neuron_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "DNMT3B_Neuron"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+DNMT3B_Neuron_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+DNMT3B_Neuron_TOP100DOWN <- DOWN %>%
+  head(100)
+
+##FOXP1_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/FOXP1_Neuron_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "FOXP1_Neuron"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+FOXP1_Neuron_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+FOXP1_Neuron_TOP100DOWN <- DOWN %>%
+  head(100)
+
+##HMGA1_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/HMGA1_Neuron_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "HMGA1_Neuron"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+HMGA1_Neuron_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+HMGA1_Neuron_TOP100DOWN <- DOWN %>%
+  head(100)
+
+##TCF4_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TCF4_Neuron_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "TCF4_Neuron"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+TCF4_Neuron_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+TCF4_Neuron_TOP100DOWN <- DOWN %>%
+  head(100)
+
+##TBR1_Neuron
+
+Data_Set <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TBR1_Neuron_DESeq2.csv") 
+
+Data_Set$TargetGene_CellType <- "TBR1_Neuron"
+
+UP <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange > 0) %>% 
+  arrange(pvalue) 
+
+UP$UP_Or_DOWN <- "UP"
+
+TBR1_Neuron_TOP100UP <- UP %>%
+  head(100)
+
+DOWN <- Data_Set %>% 
+  dplyr::select(TargetGene_CellType, gene, pvalue, log2FoldChange) %>% 
+  dplyr::filter(log2FoldChange < 0) %>% 
+  arrange(pvalue) 
+
+DOWN$UP_Or_DOWN <- "DOWN"
+
+TBR1_Neuron_TOP100DOWN <- DOWN %>%
+  head(100)
+
+
+##bindign and converting
+
+Neuron_Data <- rbind(BCL11A_Neuron_TOP100UP, BCL11A_Neuron_TOP100DOWN, ANXA1_Neuron_TOP100UP, ANXA1_Neuron_TOP100DOWN, ASIC1_Neuron_TOP100UP, ASIC1_Neuron_TOP100DOWN, DNMT3B_Neuron_TOP100UP, DNMT3B_Neuron_TOP100DOWN, FOXP1_Neuron_TOP100UP, FOXP1_Neuron_TOP100DOWN, HMGA1_Neuron_TOP100UP, HMGA1_Neuron_TOP100DOWN, TCF4_Neuron_TOP100UP, TCF4_Neuron_TOP100DOWN, TBR1_Neuron_TOP100UP, TBR1_Neuron_TOP100DOWN)
+
+##Converting gene names
+
+mart <- useMart("ensembl", host="https://useast.ensembl.org")
+mart <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", host="https://useast.ensembl.org")
+genes <- Neuron_Data$gene
+G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","start_position","end_position","strand","hgnc_symbol","chromosome_name"), values=genes, mart= mart)
+
+
+G_list <- G_list %>% 
+  dplyr::rename(gene = ensembl_gene_id) %>% 
+  dplyr::select(gene, hgnc_symbol)
+
+Neuron_Data <- Neuron_Data  %>% 
+  left_join(G_list, by = "gene")
+
+write_csv(Neuron_Data, "/Users/troymcdiarmid/Downloads/Neuron_Top100_UP_DOWN_DEGs.txt")
+
+```
+
+
+

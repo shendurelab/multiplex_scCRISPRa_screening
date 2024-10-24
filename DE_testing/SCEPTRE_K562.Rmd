@@ -1,0 +1,401 @@
+---
+title: "SCEPTRE"
+author: "Troy McDiarmid"
+date: "2023-08-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(cowplot)
+library(Matrix)
+library(sceptre)
+library(VGAM)
+library(hdf5r)
+library(Seurat)
+```
+
+
+```{r}
+
+##Reading in data and creating a seaurat object
+
+data_dir <- '/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/K562_filtered_feature_bc_matrix/'
+list.files(data_dir)
+
+CRISPRaQTL_Pilot_data <- Read10X(data.dir = data_dir)
+CRISPRaQTL_Pilot_Seurat_Object = CreateSeuratObject(counts = CRISPRaQTL_Pilot_data$`Gene Expression`, min.cells = 4, min.features = 200, gene.column = 1)
+
+CRISPRaQTL_Pilot_Seurat_Object
+
+
+```
+
+```{r}
+##Checking how much mito DNA we have in the Seurat object
+
+CRISPRaQTL_Pilot_Seurat_Object[["percent.mt"]] <- PercentageFeatureSet(CRISPRaQTL_Pilot_Seurat_Object, pattern = "^MT-")
+```
+
+```{r}
+##Filtering for high quality cells 
+
+CRISPRaQTL_Pilot_Seurat_Object_Subset <- subset(CRISPRaQTL_Pilot_Seurat_Object, subset = percent.mt < 10 & nCount_RNA > 4000)
+
+CRISPRaQTL_Pilot_Seurat_Object_Subset
+```
+
+```{r}
+
+##Reading in Feature Barcode Matrix
+
+matrix_dir = "/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/K562_filtered_feature_bc_matrix/"
+barcode.path <- paste0(matrix_dir, "barcodes.tsv.gz")
+features.path <- paste0(matrix_dir, "features.tsv.gz")
+matrix.path <- paste0(matrix_dir, "matrix.mtx.gz")
+mat <- readMM(file = matrix.path)
+feature.names = read.delim(features.path,
+                           header = FALSE,
+                           stringsAsFactors = FALSE)
+barcode.names = read.delim(barcode.path,
+                           header = FALSE,
+                           stringsAsFactors = FALSE)
+colnames(mat) = barcode.names$V1
+rownames(mat) = feature.names$V1
+
+```
+
+```{r}
+##Converting detected genes to ensembl to filter the matrix
+
+Detected_Genes <- rownames(CRISPRaQTL_Pilot_Seurat_Object_Subset)
+
+genes <- read.table("/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/K562_filtered_feature_bc_matrix/features.tsv.gz", fill = TRUE, stringsAsFactors = FALSE) %>% 
+   dplyr::filter(V2 %in% Detected_Genes)
+
+Detected_Genes <- genes$V1
+```
+
+
+```{r}
+##Indexing the matrix for only high quality cells  seurat object (x is the index vector of high quality cell names)
+
+x <- rownames(CRISPRaQTL_Pilot_Seurat_Object_Subset@meta.data)
+
+Seurat_Filtered_FBC_Mat <- mat[ ,x]
+
+
+```
+
+```{r}
+##Creating a gRNA Matrix 
+
+Ft_Ref <- read_csv("/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/feature_reference.csv")  %>% 
+    rename(gRNA = id)
+    
+x <- Ft_Ref$gRNA
+
+gRNA_Mat <- Seurat_Filtered_FBC_Mat[x, ]
+
+gRNA_matrix <- gRNA_Mat
+
+```
+
+
+```{r}
+
+##Create gene matrix
+
+##Include only detected genes in the gene matrix and remove the gRNAs from the gene matrix
+
+Seurat_Filtered_FBC_Mat <- Seurat_Filtered_FBC_Mat[Detected_Genes, ]
+gene_matrix <- Seurat_Filtered_FBC_Mat[-which(rownames(Seurat_Filtered_FBC_Mat) %in% x), ]
+
+gene_matrix 
+
+```
+
+
+
+```{r}
+#covariance matrix
+lg_gene_lib_size <- log(colSums(gene_matrix))
+lg_gRNA_lib_size <- log(colSums(gRNA_matrix))
+lg_non_zero_genes <- log(colSums(gene_matrix>0))
+lg_non_zero_sgRNA <- log(colSums(gRNA_matrix>0))
+
+
+##Isolate lane information
+
+lane <- as.data.frame(colnames(CRISPRaQTL_Pilot_Seurat_Object_Subset)) %>% 
+    separate(`colnames(CRISPRaQTL_Pilot_Seurat_Object_Subset)`, into = c("Garbage", "lane"), sep = "-" )
+
+##Add cell type information
+
+VP64_Cells <- lane %>% 
+  filter(lane < 3)
+VP64_Cells$cell_line <- "VP64"
+
+VPR_Cells <- lane %>% 
+  filter(lane > 2)
+VPR_Cells$cell_line <- "VPR"
+
+cell_line <- rbind(VP64_Cells, VPR_Cells)
+
+##Make both lane and cell type factors
+
+lane <- as.factor(lane$lane)  
+cell_line <- as.factor(cell_line$cell_line)
+
+#Isolate mito information
+
+p_mito <- CRISPRaQTL_Pilot_Seurat_Object_Subset$percent.mt
+
+#Construct covariate matrix 
+
+covariate_matrix <- data.frame(lg_gRNA_lib_size,
+                                  lg_non_zero_sgRNA,
+                                  lg_gene_lib_size,
+                                  lg_non_zero_genes,
+                                  p_mito,
+                                  lane,
+                                  cell_line)
+
+```
+
+
+```{r}
+# identification and removal of cells w/o sgRNA detected
+cells_wo_sgRNA_id <- covariate_matrix$lg_non_zero_sgRNA>-Inf
+
+covariate_matrix <- covariate_matrix[cells_wo_sgRNA_id,]
+gRNA_matrix <- gRNA_matrix[,cells_wo_sgRNA_id]
+gene_matrix <- gene_matrix[,cells_wo_sgRNA_id]
+
+```
+
+
+```{r}
+##Constructing gRNA groups dataframe
+
+gRNA_group_data_frame <- Ft_Ref %>% 
+  select(gRNA, target_gene_id, target_gene_name)
+
+
+targeting_gRNA_group_data_frame <- gRNA_group_data_frame %>% 
+  filter(!target_gene_id == "Non-Targeting")
+NTC_gRNA_group_data_frame <- gRNA_group_data_frame %>% 
+  filter(target_gene_id == "Non-Targeting")
+
+targeting_gRNA_group_data_frame$grna_group <- targeting_gRNA_group_data_frame$gRNA 
+NTC_gRNA_group_data_frame$grna_group <- "non-targeting"
+
+gRNA_group_data_frame <- rbind(targeting_gRNA_group_data_frame, NTC_gRNA_group_data_frame)
+
+gRNA_group_data_frame$grna_id <- gRNA_group_data_frame$gRNA
+
+gRNA_group_data_frame <- gRNA_group_data_frame %>% 
+  select(grna_id, grna_group)
+
+
+##Making enhancers targeting
+
+enhancer_gRNA_group_data_frame <- gRNA_group_data_frame %>% 
+  filter(grepl("chr", grna_id))
+
+enhancer_gRNA_group_data_frame$grna_group <- enhancer_gRNA_group_data_frame$grna_id
+
+rest_gRNA_group_data_frame <- gRNA_group_data_frame %>% 
+  filter(!grepl("chr", grna_id)) 
+
+gRNA_group_data_frame <- rbind(enhancer_gRNA_group_data_frame, rest_gRNA_group_data_frame)
+
+##Making grna_group a factor
+
+gRNA_group_data_frame <- gRNA_group_data_frame %>%
+  mutate(grna_group = as.factor(grna_group))
+
+```
+
+
+
+```{r}
+# 1. set the formula object
+formula_object <- formula(~lg_gRNA_lib_size + lg_non_zero_sgRNA + lg_gene_lib_size + lg_non_zero_genes + p_mito + lane) 
+
+```
+
+
+```{r}
+##Making gRNA-gene pairs to test 
+
+##Calculating the number of cells with each perturbation to only
+# input guides with >1 cell
+N_Cells_With_Pert_Mat <- rowSums(gRNA_Mat > 5)
+N_Cells_With_Pert_DF <- as.data.frame(as.table(N_Cells_With_Pert_Mat))
+N_Cells_With_Pert_DF <- N_Cells_With_Pert_DF %>% rename(Gene = Var1) %>%
+    rename(N_Cells_With_Perturbation = Freq)
+No_Cell_gRNAs <- N_Cells_With_Pert_DF %>%
+	filter(N_Cells_With_Perturbation < 2) %>% select(Gene)
+No_Cell_gRNAs <- No_Cell_gRNAs$Gene
+
+##Reading in the list of all gRNA-1mb neighbouring gene pairings for testing
+All_1MB_Neighbouring_Genes_2_Test <- read_csv(paste0("/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/CRISPRaQTL_K562_pilot_hg38_gRNA_All_distinct_neighbouring_genes_1MB_to_test.csv"))
+All_1MB_Neighbouring_Genes_2_Test <- All_1MB_Neighbouring_Genes_2_Test %>%
+    group_by(gRNA_Name) %>% mutate(Test_ID = row_number()) %>%
+    unite("Test_ID",  c("gRNA_Name", "hgnc_symbol", "Test_ID"), remove = FALSE)
+
+##Filter the list to only test genes that are detected
+Detected_Genes <- rownames(gene_matrix) 
+All_1MB_Neighbouring_Genes_2_Test <- All_1MB_Neighbouring_Genes_2_Test %>%
+    filter(ensembl_gene_id %in% Detected_Genes)
+
+##Filter to exclude any gRNAs with no cells detected 
+
+All_1MB_Neighbouring_Genes_2_Test <- All_1MB_Neighbouring_Genes_2_Test %>%
+    filter(!gRNA_Name %in% No_Cell_gRNAs)
+
+All_1MB_Neighbouring_Genes_2_Test
+
+##Renaming the gRNA-gene pairs to SCEPTRE terminology 
+
+discovery_pairs <- All_1MB_Neighbouring_Genes_2_Test %>% 
+    select(ensembl_gene_id, gRNA_Name, Targeting) %>%
+    filter(!Targeting == "Non-targeting") %>% 
+    rename(response_id = ensembl_gene_id, grna_group = gRNA_Name, type = Targeting) 
+
+discovery_pairs <- discovery_pairs %>% 
+    mutate(type = as.factor(type))
+
+
+##Down sample
+## discovery_pairs <- discovery_pairs %>% 
+  # head(1000)
+  
+
+
+```
+
+
+
+
+```{r}
+##Running the method with a one sided test 
+
+
+# 2. run the calibration check
+calibration_result <- run_sceptre_highmoi_experimental(
+  response_matrix = gene_matrix,
+  grna_matrix = gRNA_matrix,
+  covariate_data_frame = covariate_matrix,
+  grna_group_data_frame = gRNA_group_data_frame,
+  response_grna_group_pairs = discovery_pairs,
+  formula_object = formula_object,
+  side = "right",
+  calibration_check = TRUE
+)
+
+# 3. verify calibration
+plot_calibration_result(calibration_result)
+
+
+
+# 4. run discovery analysis
+discovery_result <- run_sceptre_highmoi_experimental(
+  response_matrix = gene_matrix,
+  grna_matrix = gRNA_matrix,
+  covariate_data_frame = covariate_matrix,
+  grna_group_data_frame = gRNA_group_data_frame,
+  response_grna_group_pairs = discovery_pairs,
+  formula_object = formula_object,
+  side = "right",
+  calibration_check = FALSE
+)
+
+# 5. compare discovery p-values to the negative control p-values; make a volcano plot
+compare_calibration_and_discovery_results(calibration_result, discovery_result)
+make_volcano_plot(discovery_result)
+
+
+# 6. obtain the discovery set
+discovery_set <- obtain_discovery_set(discovery_result) 
+
+##Change the names of results so they are not written over when running a one sided test 
+
+
+Right_Sided_Calibration_Result <- calibration_result
+Right_Sided_Discovery_Result <- discovery_result
+Right_Sided_Test_Discovery_Set <- discovery_set
+
+##Write the results to file
+
+write_csv(Right_Sided_Calibration_Result, "/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/K562_Results/Right_Sided_Calibration_Result.csv")
+write_csv(Right_Sided_Discovery_Result, "/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/K562_Results/Right_Sided_Discovery_Result.csv")
+write_csv(Right_Sided_Test_Discovery_Set, "/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/K562_Results/Right_Sided_Test_Discovery_Set.csv")
+
+```
+
+
+
+
+```{r}
+
+##Running the method with a two-sided test 
+
+
+# 2. run the calibration check
+calibration_result <- run_sceptre_highmoi_experimental(
+  response_matrix = gene_matrix,
+  grna_matrix = gRNA_matrix,
+  covariate_data_frame = covariate_matrix,
+  grna_group_data_frame = gRNA_group_data_frame,
+  response_grna_group_pairs = discovery_pairs,
+  formula_object = formula_object,
+  side = "both",
+  calibration_check = TRUE
+)
+
+# 3. verify calibration
+plot_calibration_result(calibration_result)
+
+
+
+# 4. run discovery analysis
+discovery_result <- run_sceptre_highmoi_experimental(
+  response_matrix = gene_matrix,
+  grna_matrix = gRNA_matrix,
+  covariate_data_frame = covariate_matrix,
+  grna_group_data_frame = gRNA_group_data_frame,
+  response_grna_group_pairs = discovery_pairs,
+  formula_object = formula_object,
+  side = "both",
+  calibration_check = FALSE
+)
+
+# 5. compare discovery p-values to the negative control p-values; make a volcano plot
+compare_calibration_and_discovery_results(calibration_result, discovery_result)
+make_volcano_plot(discovery_result)
+
+
+# 6. obtain the discovery set
+discovery_set <- obtain_discovery_set(discovery_result) 
+
+
+##Change the names of results so they are not written over when running a one sided test 
+
+
+Two_Sided_Calibration_Result <- calibration_result
+Two_Sided_Discovery_Result <- discovery_result
+Two_Sided_Test_Discovery_Set <- discovery_set
+
+
+##Write the results to file
+
+write_csv(Two_Sided_Calibration_Result, "/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/K562_Results/Two_Sided_Calibration_Result.csv")
+write_csv(Two_Sided_Discovery_Result, "/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/K562_Results/Two_Sided_Discovery_Result.csv")
+write_csv(Two_Sided_Test_Discovery_Set, "/Users/troymcdiarmid/Documents/Neurohub/SCEPTRE_NBT_Analysis/K562_Results/Two_Sided_Test_Discovery_Set.csv")
+
+```
+
+
+

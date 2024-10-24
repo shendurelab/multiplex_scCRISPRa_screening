@@ -1,0 +1,854 @@
+---
+title: "Singleton_Validations_Bulk_Analysis"
+author: "Troy McDiarmid"
+date: "2023-09-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+##Loading required libraries
+
+library(tidyverse)
+library(ensembldb)
+library(tximport)
+library(ggrepel)
+library(EnsDb.Hsapiens.v86)
+library(DESeq2)
+library(Gviz)
+library(GenomicRanges)
+library(biomaRt)
+
+```
+
+
+```{r}
+# get files
+files <- list.files(paste0('/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Neuron_kallisto_output/'), recursive=T,
+    pattern='abundance.tsv', full.names=T)
+names(files) <- str_match(files, pattern='output/(.+)_S[0-9]+/abundance.tsv')[,2]
+
+# opening and importing the files
+tx2gene0 <- transcripts(EnsDb.Hsapiens.v86, return.type="DataFrame")
+tx2gene <- data.frame(TXNAME=tx2gene0$tx_name, GENEID=tx2gene0$gene_id)
+txi <- tximport(files, type = "kallisto", tx2gene = tx2gene, ignoreTxVersion=T, countsFromAbundance = c("scaledTPM"))
+
+
+
+All_Samples_Counts_DF <- txi$counts %>% as.data.frame %>% tibble::rownames_to_column('gene') %>%
+    pivot_longer(cols=!gene)
+
+```
+
+
+```{r}
+
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/BCL11A_Neuron_DESeq2.csv"
+Plot_File_Name <- "BCL11A_Neuron_Volcano.jpeg"
+Target_Gene <- "ENSG00000119866"
+Target_Gene_HGNC <- "BCL11A"
+
+##Construct sample table
+sampleTable_1 <- data.frame(condition = factor(rep(c("Neuron_ANXA1", "Neuron_DNMT3B", "Neuron_BCL11A", "Neuron_TCF4", "Neuron_FOXP1", "Neuron_TBR1"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Neuron_ASIC1"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Neuron_HMGA1"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+
+##BCL11A comparison
+
+#Construct sample table
+
+sampleTable_1 <- data.frame(condition = factor(rep(c("Control", "Control", "Neuron_BCL11A", "Control", "Control", "Control"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Control"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Control"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Other_Results, Hit_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) +
+  xlim(-10,10) +
+  ylim(0,8)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+
+```
+
+
+```{r}
+
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TBR1_Neuron_DESeq2.csv"
+Plot_File_Name <- "TBR1_Neuron_Volcano.jpeg"
+Target_Gene <- "ENSG00000136535"
+Target_Gene_HGNC <- "TBR1"
+
+##Construct sample table
+sampleTable_1 <- data.frame(condition = factor(rep(c("Neuron_ANXA1", "Neuron_DNMT3B", "Neuron_BCL11A", "Neuron_TCF4", "Neuron_FOXP1", "Neuron_TBR1"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Neuron_ASIC1"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Neuron_HMGA1"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+
+##BCL11A comparison
+
+#Construct sample table
+
+sampleTable_1 <- data.frame(condition = factor(rep(c("Control", "Control", "Control", "Control", "Control", "Neuron_TBR1"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Control"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Control"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) +
+  ylim(0,8)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+
+```
+
+
+
+```{r}
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/HMGA1_Neuron_DESeq2.csv"
+Plot_File_Name <- "HMGA1_Neuron_Volcano.jpeg"
+Target_Gene <- "ENSG00000137309"
+Target_Gene_HGNC <- "HMGA1"
+
+##Construct sample table
+sampleTable_1 <- data.frame(condition = factor(rep(c("Neuron_ANXA1", "Neuron_DNMT3B", "Neuron_BCL11A", "Neuron_TCF4", "Neuron_FOXP1", "Neuron_TBR1"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Neuron_ASIC1"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Neuron_HMGA1"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+
+##BCL11A comparison
+
+#Construct sample table
+
+sampleTable_1 <- data.frame(condition = factor(rep(c("Control", "Control", "Control", "Control", "Control", "Control"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Control"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Neuron_HMGA1"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) +
+  xlim(-8,8)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+```
+
+
+```{r}
+
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ASIC1_Neuron_DESeq2.csv"
+Plot_File_Name <- "ASIC1_Neuron_Volcano.jpeg"
+Target_Gene <- "ENSG00000110881"
+Target_Gene_HGNC <- "ASIC1"
+
+##Construct sample table
+sampleTable_1 <- data.frame(condition = factor(rep(c("Neuron_ANXA1", "Neuron_DNMT3B", "Neuron_BCL11A", "Neuron_TCF4", "Neuron_FOXP1", "Neuron_TBR1"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Neuron_ASIC1"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Neuron_HMGA1"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+
+##BCL11A comparison
+
+#Construct sample table
+
+sampleTable_1 <- data.frame(condition = factor(rep(c("Control", "Control", "Control", "Control", "Control", "Control"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Neuron_ASIC1"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Control"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Other_Results, Hit_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) +
+  xlim(-8,8)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+
+```
+
+
+```{r}
+
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/DNMT3B_Neuron_DESeq2.csv"
+Plot_File_Name <- "DNMT3B_Neuron_Volcano.jpeg"
+Target_Gene <- "ENSG00000088305"
+Target_Gene_HGNC <- "DNMT3B"
+
+##Construct sample table
+sampleTable_1 <- data.frame(condition = factor(rep(c("Neuron_ANXA1", "Neuron_DNMT3B", "Neuron_BCL11A", "Neuron_TCF4", "Neuron_FOXP1", "Neuron_TBR1"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Neuron_ASIC1"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Neuron_HMGA1"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+
+##BCL11A comparison
+
+#Construct sample table
+
+sampleTable_1 <- data.frame(condition = factor(rep(c("Control", "Neuron_DNMT3B", "Control", "Control", "Control", "Control"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Control"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Control"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+write_csv(Discovery_Results, File_Name)
+
+Discovery_Results$plot_pval[Discovery_Results$plot_pval > 6] <- 6
+Discovery_Results$log2FoldChange[Discovery_Results$log2FoldChange < -8] <- -8
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) +
+  xlim(-8,8)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+```
+
+```{r}
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/FOXP1_Neuron_DESeq2.csv"
+Plot_File_Name <- "FOXP1_Neuron_Volcano.jpeg"
+Target_Gene <- "ENSG00000114861"
+Target_Gene_HGNC <- "FOXP1"
+
+##Construct sample table
+sampleTable_1 <- data.frame(condition = factor(rep(c("Neuron_ANXA1", "Neuron_DNMT3B", "Neuron_BCL11A", "Neuron_TCF4", "Neuron_FOXP1", "Neuron_TBR1"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Neuron_ASIC1"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Neuron_HMGA1"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+
+##BCL11A comparison
+
+#Construct sample table
+
+sampleTable_1 <- data.frame(condition = factor(rep(c("Control", "Control", "Control", "Control", "Neuron_FOXP1", "Control"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Control"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Control"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) + 
+  xlim(-8,8)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+
+
+```
+
+```{r}
+
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/TCF4_Neuron_DESeq2.csv"
+Plot_File_Name <- "TCF4_Neuron_Volcano.jpeg"
+Target_Gene <- "ENSG00000196628"
+Target_Gene_HGNC <- "TCF4"
+
+##Construct sample table
+sampleTable_1 <- data.frame(condition = factor(rep(c("Neuron_ANXA1", "Neuron_DNMT3B", "Neuron_BCL11A", "Neuron_TCF4", "Neuron_FOXP1", "Neuron_TBR1"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Neuron_ASIC1"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Neuron_HMGA1"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+
+##BCL11A comparison
+
+#Construct sample table
+
+sampleTable_1 <- data.frame(condition = factor(rep(c("Control", "Control", "Control", "Neuron_TCF4", "Control", "Control"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Control"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Control"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+write_csv(Discovery_Results, File_Name)
+
+Discovery_Results$plot_pval[Discovery_Results$plot_pval > 6] <- 6
+Discovery_Results$log2FoldChange[Discovery_Results$log2FoldChange < -8] <- -8
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) + 
+  xlim(-8,8)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+
+```
+
+
+```{r}
+
+##Set target gene and file name
+
+File_Name <- "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/ANXA1_Neuron_DESeq2.csv"
+Plot_File_Name <- "ANXA1_Neuron_Volcano.jpeg"
+Target_Gene <- "ENSG00000135046"
+Target_Gene_HGNC <- "ANXA1"
+
+##Construct sample table
+sampleTable_1 <- data.frame(condition = factor(rep(c("Neuron_ANXA1", "Neuron_DNMT3B", "Neuron_BCL11A", "Neuron_TCF4", "Neuron_FOXP1", "Neuron_TBR1"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Neuron_ASIC1"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Neuron_HMGA1"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+
+##BCL11A comparison
+
+#Construct sample table
+
+sampleTable_1 <- data.frame(condition = factor(rep(c("Neuron_ANXA1", "Control", "Control", "Control", "Control", "Control"), each = 3)))
+sampleTable_2 <- data.frame(condition = factor(rep(c("Control"), each = 2)))
+sampleTable_3 <- data.frame(condition = factor(rep(c("Control"), each = 3)))
+sampleTable <- rbind(sampleTable_1, sampleTable_2, sampleTable_3)
+
+rownames(sampleTable) <- colnames(txi$counts)
+
+##RunDESeq
+
+dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+##Summarise results
+
+summary(res)
+
+##Convert results to a DF
+
+res_df <- as.data.frame(res) %>% 
+  rownames_to_column() %>% 
+  dplyr::rename(gene = rowname)
+
+##Labeling target gene
+
+Target_Gene_Results <- res_df %>% 
+  dplyr::filter(gene == Target_Gene) 
+Other_Results <- res_df %>% 
+  dplyr::filter(!gene == Target_Gene)
+
+Target_Gene_Results$Intended_Target <- "TRUE"
+Other_Results$Intended_Target <- "FALSE"
+
+Discovery_Results <- rbind(Target_Gene_Results, Other_Results)
+
+##Labeling hits  
+
+Hit_Results <- Discovery_Results %>% 
+  dplyr::filter(padj < 0.1) 
+Other_Results <- Discovery_Results %>% 
+  dplyr::filter(padj > 0.1 | is.na(padj))
+
+Hit_Results$Significant <- "TRUE"
+Other_Results$Significant <- "FALSE"
+
+Discovery_Results <- rbind(Hit_Results, Other_Results)
+
+##Adding plot p_value
+
+Discovery_Results <- Discovery_Results %>% 
+  mutate(plot_pval = -log10(pvalue))
+
+##Plotting
+
+Intended_Target_Results <- Discovery_Results %>% 
+  dplyr::filter(Intended_Target == TRUE)
+
+ggplot(Discovery_Results, aes(x = log2FoldChange, y = plot_pval, colour = Significant, fill = Intended_Target, shape = Intended_Target, size = Intended_Target)) +
+  geom_point() +
+  scale_color_manual(values=c("#D2D5D5", "#56B4E9")) +
+  scale_size_manual(values=c(1.5, 6)) +
+        theme_classic() +
+  geom_point(data = Intended_Target_Results, aes(x = log2FoldChange, y = plot_pval), size = 6, shape = 24, colour = "black", fill = NA) +
+  theme(axis.line = element_line(colour = 'black', size = 0.8)) +
+  theme(axis.ticks = element_line(colour = "black", size = 0.8)) +
+  theme(axis.ticks.length=unit(.2, "cm")) +
+  labs(title = Target_Gene_HGNC, x = "log2(fold change)", y = "-log10(observed P-values)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family="Arial", colour = "black", size = 30)) +
+  xlim(-8,8)
+ggsave(Plot_File_Name, width = 9, height = 7, path = "/Users/troymcdiarmid/Documents/Neurohub/Singleton_Validations/Genome_Wide_DESeq2_Output/")
+
+write_csv(Discovery_Results, File_Name)
+
+```
+
